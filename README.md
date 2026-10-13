@@ -8,8 +8,4 @@ Dashboard: [jacobazu.github.io/dk1-battery-trade](https://jacobazu.github.io/dk1
 - `risk.py`: revenue at risk, same method as in R. Matches on 325 of 327 days.
 - `limit_backtest.py`: a loss limit on the plan. It costs more than it saves for this battery.
 - `stress.py`: stress tests on the plan.
-- `dashboard.py`: makes the dashboard in `docs/`.
-
-## Next
-
-Daily update (WIP)
+- `dashboard.py`: makes the dashboard. The main page has the P&L since launch on 13 Oct 2026. The backtest has its own page.
