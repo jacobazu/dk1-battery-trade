@@ -1,4 +1,4 @@
-"""Compare the Python battery revenue with the R results in dk1-price-forecasting."""
+"""Python battery revenue vs R (results/battery_daily.csv)."""
 import pandas as pd
 from battery import battery_profit
 

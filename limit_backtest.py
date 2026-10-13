@@ -1,10 +1,4 @@
-"""Backtest of a loss limit on the battery plan.
-
-Each day the plan still maximises revenue at the forecast, but the average revenue of the worst 5% of
-the EWMA scenarios (risk.py) may not fall below -limit. Same days as the revenue at risk in R.
-Set before running: the limits below, and the limited plans are compared with the plan without a
-limit on realized revenue (Newey-West, 7 lags), loss days and the worst 5% of days.
-"""
+"""Loss limit: the worst 5% of scenarios may not average below -limit."""
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +7,7 @@ from battery import battery_schedule
 from data import load_backtest, wide
 from risk import error_matrix, error_scenarios, ewma_vol, has_history, nw_test, worst_mean
 
+# set before running, compared with no limit (newey-west)
 LIMITS = [100, 50, 25, 0]  # euro a bad day may lose on average
 
 fc = load_backtest()

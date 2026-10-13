@@ -1,8 +1,4 @@
-"""Dashboard for the battery. docs/index.html is the live page: tomorrow's plan, the P&L since launch and the
-stress tests. docs/backtest.html has the backtest: track record, risk and the loss limit.
-
-Runs daily after the price repo has saved tomorrow's forecast.
-"""
+"""Battery dashboard: docs/index.html (live) and docs/backtest.html. Runs daily."""
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
@@ -13,6 +9,7 @@ import plotly.graph_objects as go
 from scipy.stats import binom
 
 from battery import SETUP, battery_schedule
+from costs import FEE, WEAR, cost_of, costs
 from data import load_all, wide
 from risk import ALPHA, error_matrix, error_scenarios, ewma_vol, has_history, tail_stats
 from stress import stress_tests
@@ -22,6 +19,7 @@ INK, GREY, LINE, GRID, BEIGE = "#1f2328", "#6b7280", "#e5ddd3", "#f1ebe4", "#cfc
 FONT = "IBM Plex Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
 PLOTLY_JS = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
 LAUNCH = pd.Timestamp("2026-10-13")  # first day traded on a live forecast
+COSTS = costs()  # nord pool fee + wear
 
 
 def eur(x):
@@ -81,14 +79,17 @@ for i in range(len(dates)):
     if not has_history(dates, E, i):
         continue
     f, a = F[i], A[i]
-    q = battery_schedule(f)
+    q = battery_schedule(f, costs=COSTS)
     S = error_scenarios(dates, E, sig, i)
-    st = tail_stats(f @ q + S @ q)
+    cost = cost_of(q, COSTS)
+    st = tail_stats(f @ q + S @ q - cost)
     known = not np.isnan(a).any()
+    qp = battery_schedule(a, costs=COSTS) if known else None
     rows.append({"date": pd.Timestamp(dates[i]), "live": pd.Timestamp(dates[i]) >= LAUNCH,
-                 "expected": st["expected"], "floor": st["floor"],
-                 "realized": a @ q if known else np.nan,
-                 "perfect": battery_schedule(a) @ a if known else np.nan,
+                 "expected": st["expected"], "floor": st["floor"], "cost": cost,
+                 "gross": a @ q if known else np.nan,
+                 "realized": a @ q - cost if known else np.nan,
+                 "perfect": a @ qp - cost_of(qp, COSTS) if known else np.nan,
                  "q": q, "f": f, "S": S})
 days = pd.DataFrame(rows)
 done = days.dropna(subset=["realized"])
@@ -99,7 +100,7 @@ f, q, S = nxt["f"], nxt["q"], nxt["S"]
 q = np.where(np.abs(q) < 1e-6, 0, q)
 lo, hi = np.percentile(f + S, 5, axis=0), np.percentile(f + S, 95, axis=0)
 fill = battery_fill(q)
-stress = stress_tests(f, q, S)
+stress = {k: v - nxt["cost"] for k, v in stress_tests(f, q, S).items()}
 worst_name, worst_val = min(stress.items(), key=lambda kv: kv[1])
 
 x, step = np.arange(24) + 0.5, np.arange(25)
@@ -157,7 +158,7 @@ pnl = lv["realized"].cumsum()
 drawdown = (pnl - np.maximum.accumulate(np.r_[0, pnl.to_numpy()])[1:]).min() if len(lv) else 0.0
 lv_miss = int((lv["realized"] < lv["floor"]).sum())
 
-# both charts start at 0 the day before launch and show at least the first week
+# start at 0 the day before launch, show at least a week
 DAY = pd.Timedelta(days=1)
 start = LAUNCH - DAY
 x_range = [start - DAY / 2, max(lv["date"].max() if len(lv) else LAUNCH, LAUNCH + 6 * DAY) + DAY / 2]
@@ -181,7 +182,7 @@ daily_chart = style(fig, 220)
 
 live_rows = "".join(
     f"<tr><td>{r.date:%a %d %b}</td><td class='n'>{eur(r.expected)}</td><td class='n'>{eur(r.floor)}</td>"
-    f"<td class='n'><b>{eur(r.realized)}</b></td><td class='n'>{eur(r.perfect)}</td>"
+    f"<td class='n'>{eur(r.cost)}</td><td class='n'><b>{eur(r.realized)}</b></td><td class='n'>{eur(r.perfect)}</td>"
     f"<td>{'below the floor' if r.realized < r.floor else ''}</td></tr>"
     for r in lv.iloc[::-1].itertuples())
 
@@ -214,6 +215,19 @@ fig.add_trace(go.Scatter(x=bt["date"], y=bt["realized"], mode="markers",
                          hovertemplate="Earned %{y:.0f} €"))
 fig.update_yaxes(ticksuffix=" €")
 risk_chart = style(fig, 380)
+
+# fees and wear, from cost_backtest.py
+cs = pd.read_csv("results/cost_summary.csv")
+case_names = {"none": "No costs", "main": f"Fee + wear {WEAR:.0f} €/MWh", "wear 10": "Fee + wear 10 €/MWh",
+              "wear 40": "Fee + wear 40 €/MWh", "with tariffs": f"Fee + wear {WEAR:.0f} €/MWh + Energinet's tariffs"}
+cost_rows = "".join(
+    f"<tr><td>{case_names[r.case]}</td><td>{r.plan}</td><td class='n'>{eur(r.cost)}</td><td class='n'><b>{eur(r.net)}</b></td>"
+    f"<td class='n'>{r.sold_per_day:.2f}</td><td class='n'>{r.days_no_trade}</td><td class='n'>{r.loss_days}</td>"
+    f"<td class='n'>{'' if np.isnan(r.p) else f'{r.diff_per_day:+.2f} € (p {r.p:.3f})'}</td></tr>"
+    for r in cs.itertuples())
+main_after = cs[(cs["case"] == "main") & (cs["plan"] == "after the fact")].iloc[0]
+main_in = cs[(cs["case"] == "main") & (cs["plan"] == "in the plan")].iloc[0]
+gross_total = cs[cs["case"] == "none"].iloc[0]
 
 # loss limit, from limit_backtest.py
 lim = pd.read_csv("results/limit_summary.csv")
@@ -254,7 +268,7 @@ live_tabs = {
 <div class='kpis'>
 {kpi(f"Buy {day}", hours(windows(q < 0)), f"{-q[q < 0].sum():.1f} MWh", BLUE)}
 {kpi("Sell", hours(windows(q > 0)), f"{q[q > 0].sum():.1f} MWh", ORANGE)}
-{kpi("Expected revenue", eur(nxt['expected']), f"At the forecast prices: {eur(f @ q)}", GREEN)}
+{kpi("Expected, after costs", eur(nxt['expected']), f"Fees and wear: {eur(nxt['cost'])}", GREEN)}
 {kpi("1 day in 20 below", eur(nxt['floor']), f"Worst stress test: {escape(worst_name.lower())}, {eur(worst_val)}", RED)}
 </div>
 <div class='grid2'>
@@ -263,7 +277,7 @@ live_tabs = {
 </div>""",
     "P&L": f"""
 <div class='kpis'>
-{kpi("P&L since launch", eur(pnl.iloc[-1]) if len(lv) else "-", f"{len(lv)} day{'s' * (len(lv) != 1)} since {LAUNCH:%d %b %Y}", GREEN)}
+{kpi("P&L since launch, after costs", eur(pnl.iloc[-1]) if len(lv) else "-", f"{len(lv)} day{'s' * (len(lv) != 1)} since {LAUNCH:%d %b %Y}, before costs {eur(lv['gross'].sum())}" if len(lv) else "", GREEN)}
 {kpi("Last day", eur(lv['realized'].iloc[-1]) if len(lv) else "-", f"{lv['date'].iloc[-1]:%a %d %b}" if len(lv) else "", ORANGE)}
 {kpi("Share of perfect foresight", f"{lv['realized'].sum() / lv['perfect'].sum():.0%}" if len(lv) else "-", "What a plan on the real prices would make", BLUE)}
 {kpi("Max drawdown", eur(drawdown), f"Days below the 1 in 20 floor: {lv_miss} of {len(lv)}", RED)}
@@ -271,9 +285,10 @@ live_tabs = {
 <div class='grid2'>
 <div>{card("P&L since launch, added up", pnl_chart)}{card("P&L per day", daily_chart)}</div>
 {card("Every day since launch", "<table><tr><th>Day</th><th class='n'>Expected</th><th class='n'>1 in 20 floor</th>"
-      f"<th class='n'>Earned</th><th class='n'>Perfect</th><th></th></tr>{live_rows}</table>"
+      f"<th class='n'>Costs</th><th class='n'>Earned</th><th class='n'>Perfect</th><th></th></tr>{live_rows}</table>"
       "<p class='note'>Each plan is made the day before from the live forecast and paid the actual day-ahead price. "
-      "Revenue before fees and battery wear.</p>")}
+      f"All numbers are after the Nord Pool fee ({FEE} €/MWh bought or sold) and battery wear ({WEAR:.0f} €/MWh sold). "
+      "Grid tariffs and taxes are left out.</p>")}
 </div>
 <p>{backtest_link}</p>""",
     "Stress tests": f"""
@@ -290,6 +305,9 @@ forecast prices. The battery is 2 MWh / 1 MW with 90% round trip efficiency and 
 the same result as the R version on 363 of 375 backtest days. On the other 12, two plans are equally good.</p>
 <p>The risk comes from the 24-hour forecast errors of up to 250 past days, scaled by an EWMA of the error
 volatility (lambda 0.94). It matches the R version on 325 of 327 days.</p>
+<p>Costs: Nord Pool's day-ahead fee of {FEE} €/MWh on every MWh bought or sold, and battery wear of {WEAR:.0f} €/MWh
+sold. The plan includes them, so it only trades when the spread pays for them. Grid tariffs and taxes are left out,
+because it isn't clear what a battery like this would pay.</p>
 <p>The P&L counts from {LAUNCH:%d %b %Y}, the first day traded on a live forecast. {backtest_link}</p>''')}""",
 }
 
@@ -297,10 +315,10 @@ backtest_tabs = {
     "Track record": f"""
 <div class='kpis'>
 {kpi("Share of perfect foresight", f"{bt['realized'].sum() / bt['perfect'].sum():.0%}", f"{n} days", ORANGE)}
-{kpi("Earned in total", eur(bt['realized'].sum()), f"{eur(bt['realized'].mean())} a day", GREEN)}
+{kpi("Earned in total, after costs", eur(bt['realized'].sum()), f"{eur(bt['realized'].mean())} a day, before costs {eur(bt['gross'].sum())}", GREEN)}
 {kpi("Days with a loss", str(int((bt['realized'] < 0).sum())), f"Worst: {eur(bt['realized'].min())}", RED)}
 </div>
-{card("What the battery would have earned, added up", track_chart)}
+{card("What the battery would have earned after costs, added up", track_chart)}
 {card("Share of perfect foresight by month", month_chart)}""",
     "Risk": f"""
 <div class='kpis'>
@@ -310,6 +328,23 @@ backtest_tabs = {
 {kpi("Average earned", eur(bt['realized'].mean()), "Per day", ORANGE)}
 </div>
 {card("Expected revenue, the 1 in 20 floor and what the battery earned (red: below the floor)", risk_chart)}""",
+    "Costs": f"""
+<div class='kpis'>
+{kpi("Before costs", eur(gross_total['net']), f"{gross_total['sold_per_day']:.2f} MWh sold a day", GREY)}
+{kpi("Costs", eur(main_in['cost']), f"{main_in['cost'] / main_in['revenue']:.0%} of the revenue", RED)}
+{kpi("After costs", eur(main_in['net']), f"{eur(main_in['net_per_day'])} a day", GREEN)}
+{kpi("Days it doesn't trade", str(main_in['days_no_trade']), f"Loss days {main_after['loss_days']} &rarr; {main_in['loss_days']}", BLUE)}
+</div>
+{card(f"Fees and wear, {bt_span}",
+      "<table><tr><th>Costs</th><th>Plan</th><th class='n'>Costs</th><th class='n'>After costs</th>"
+      "<th class='n'>MWh sold a day</th><th class='n'>Days no trade</th><th class='n'>Loss days</th>"
+      f"<th class='n'>In the plan vs after (per day)</th></tr>{cost_rows}</table>"
+      "<p>After the fact: the plan ignores the costs and they are taken off afterwards. In the plan: the plan only "
+      "trades when the spread at the forecast pays for them. With 20 €/MWh wear both end up the same, but putting the "
+      "costs in the plan halves the loss days. The higher the costs, the more it pays to put them in the plan. "
+      "Wear is an assumption: a system costs about $177/kWh in Europe (BNEF 2025), so 6,000 full cycles would be about "
+      "$30 per MWh. Energinet's tariffs (11.5 øre/kWh on charging, 1.03 øre/kWh on discharging) are shown separately, "
+      "since it isn't clear a battery like this would pay all of them. p: Newey-West, 7 lags.</p>")}""",
     "Loss limit": f"""
 <div class='grid2'>
 {card("Revenue given up for each loss limit", limit_chart)}
@@ -317,7 +352,8 @@ backtest_tabs = {
       "<table><tr><th>Limit</th><th class='n'>Days it binds</th><th class='n'>Revenue</th><th class='n'>p</th>"
       f"<th class='n'>Loss days</th><th class='n'>Worst day</th></tr>{lim_rows}</table>"
       "<p>The limit is on the average of the worst 5% of scenarios. It costs more than it saves for this "
-      "battery. Losses are rare, and the days the limit hits are the volatile days, which pay the most.</p>")}
+      "battery. Losses are rare, and the days the limit hits are the volatile days, which pay the most. "
+      "This backtest is before fees and wear.</p>")}
 </div>""",
 }
 

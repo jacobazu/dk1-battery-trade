@@ -1,4 +1,4 @@
-"""Compare the Python revenue at risk (EWMA method) with results/battery_risk_daily.csv from R."""
+"""Python revenue at risk vs R (results/battery_risk_daily.csv)."""
 import numpy as np
 import pandas as pd
 from battery import battery_schedule

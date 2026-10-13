@@ -1,4 +1,4 @@
-"""Forecasts and prices from the dk1-price-forecasting repo on GitHub."""
+"""Forecasts and prices from the price repo on GitHub."""
 import pandas as pd
 
 REPO = "https://raw.githubusercontent.com/jacobazu/dk1-price-forecasting/master/"
@@ -22,7 +22,7 @@ def live_prices():
 
 
 def load_live(after):
-    """Live forecasts for days after `after`, with the actual price where it is known."""
+    """Live forecasts after `after`, with actual prices where known."""
     lv = pd.read_csv(REPO + "forecasts/forecasts_live.csv", parse_dates=["date"])
     lv = lv[lv["date"] > after].drop_duplicates(["date", "hour"], keep="last")
     lv["ensemble"] = lv[PARTS].mean(axis=1)
