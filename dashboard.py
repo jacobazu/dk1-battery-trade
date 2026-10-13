@@ -286,29 +286,23 @@ live_tabs = {
 <div>{card("P&L since launch, added up", pnl_chart)}{card("P&L per day", daily_chart)}</div>
 {card("Every day since launch", "<table><tr><th>Day</th><th class='n'>Expected</th><th class='n'>1 in 20 floor</th>"
       f"<th class='n'>Costs</th><th class='n'>Earned</th><th class='n'>Perfect</th><th></th></tr>{live_rows}</table>"
-      "<p class='note'>Each plan is made the day before from the live forecast and paid the actual day-ahead price. "
-      f"All numbers are after the Nord Pool fee ({FEE} €/MWh bought or sold) and battery wear ({WEAR:.0f} €/MWh sold). "
-      "Grid tariffs and taxes are left out.</p>")}
+      "<p class='note'>Planned the day before on the live forecast, paid the real price. "
+      f"After the Nord Pool fee ({FEE} €/MWh) and wear ({WEAR:.0f} €/MWh sold). No grid tariffs or taxes.</p>")}
 </div>
 <p>{backtest_link}</p>""",
     "Stress tests": f"""
 {card(f"What {day} earns if it goes like this", stress_chart)}
-<p class='note'>Worst of the last 250 days: the plan put through the worst past forecast error. The peak doesn't
-come: the selling hours fall to the day's median price. Negative prices: -50 €/MWh from 11:00 to 15:00.
-Errors 3 times as big: the average of the worst 5% of scenarios with errors three times as big.</p>""",
+<p class='note'>Worst past day: the worst forecast error of the last 250 days. Peak doesn't come: selling hours
+fall to the median price. Negative prices: -50 €/MWh 11-15. Errors x3: the worst 5% with errors three times as big.</p>""",
     "Method": f"""
 {card("How it works", f'''
 <p>The forecast is the ensemble from my <a href="https://github.com/jacobazu/dk1-price-forecasting">DK1 price
-forecasts</a> (R), made before the day-ahead auction at noon the day before.</p>
-<p>The plan is a mixed-integer linear program in Python (scipy). It buys and sells to make the most at the
-forecast prices. The battery is 2 MWh / 1 MW with 90% round trip efficiency and one cycle a day. The plan gives
-the same result as the R version on 363 of 375 backtest days. On the other 12, two plans are equally good.</p>
-<p>The risk comes from the 24-hour forecast errors of up to 250 past days, scaled by an EWMA of the error
-volatility (lambda 0.94). It matches the R version on 325 of 327 days.</p>
-<p>Costs: Nord Pool's day-ahead fee of {FEE} €/MWh on every MWh bought or sold, and battery wear of {WEAR:.0f} €/MWh
-sold. The plan includes them, so it only trades when the spread pays for them. Grid tariffs and taxes are left out,
-because it isn't clear what a battery like this would pay.</p>
-<p>The P&L counts from {LAUNCH:%d %b %Y}, the first day traded on a live forecast. {backtest_link}</p>''')}""",
+forecasts</a> (R), made before the noon auction the day before.</p>
+<p>The plan is a mixed-integer program (scipy): 2 MWh / 1 MW, 90% round trip, one cycle a day. It includes the
+Nord Pool fee and {WEAR:.0f} €/MWh wear, so it only trades when the spread pays for them. Without costs it gives the same
+plan as the R version on 363 of 375 days.</p>
+<p>Risk: past days' 24-hour forecast errors, scaled by an EWMA of their volatility, run through the plan.</p>
+<p>The P&L counts from {LAUNCH:%d %b %Y}. {backtest_link}</p>''')}""",
 }
 
 backtest_tabs = {
@@ -339,21 +333,17 @@ backtest_tabs = {
       "<table><tr><th>Costs</th><th>Plan</th><th class='n'>Costs</th><th class='n'>After costs</th>"
       "<th class='n'>MWh sold a day</th><th class='n'>Days no trade</th><th class='n'>Loss days</th>"
       f"<th class='n'>In the plan vs after (per day)</th></tr>{cost_rows}</table>"
-      "<p>After the fact: the plan ignores the costs and they are taken off afterwards. In the plan: the plan only "
-      "trades when the spread at the forecast pays for them. With 20 €/MWh wear both end up the same, but putting the "
-      "costs in the plan halves the loss days. The higher the costs, the more it pays to put them in the plan. "
-      "Wear is an assumption: a system costs about $177/kWh in Europe (BNEF 2025), so 6,000 full cycles would be about "
-      "$30 per MWh. Energinet's tariffs (11.5 øre/kWh on charging, 1.03 øre/kWh on discharging) are shown separately, "
-      "since it isn't clear a battery like this would pay all of them. p: Newey-West, 7 lags.</p>")}""",
+      "<p>After the fact: costs taken off afterwards. In the plan: it only trades when the spread pays for them. "
+      "At 20 €/MWh wear the total is the same, but loss days halve. The higher the costs, the more it pays to plan "
+      "with them. Wear is an assumption, sources in the README. p: Newey-West.</p>")}""",
     "Loss limit": f"""
 <div class='grid2'>
 {card("Revenue given up for each loss limit", limit_chart)}
 {card(f"Loss limit backtest, {bt_span}",
       "<table><tr><th>Limit</th><th class='n'>Days it binds</th><th class='n'>Revenue</th><th class='n'>p</th>"
       f"<th class='n'>Loss days</th><th class='n'>Worst day</th></tr>{lim_rows}</table>"
-      "<p>The limit is on the average of the worst 5% of scenarios. It costs more than it saves for this "
-      "battery. Losses are rare, and the days the limit hits are the volatile days, which pay the most. "
-      "This backtest is before fees and wear.</p>")}
+      "<p>The limit is on the average of the worst 5% of scenarios. It costs more than it saves: losses are rare, "
+      "and the days it hits are the volatile ones, which pay the most. Before fees and wear.</p>")}
 </div>""",
 }
 
