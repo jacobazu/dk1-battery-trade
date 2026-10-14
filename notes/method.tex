@@ -24,7 +24,7 @@ A 2\,MWh / 1\,MW battery planned every day on my DK1 price forecast, with its ri
 \begin{center}\small
 \begin{tabularx}{\linewidth}{@{}lL@{}}
 \toprule
-Plan & Mixed-integer linear program on the ensemble forecast, and on each model alone to compare: 90\% round trip, one cycle a day \citep{bradbury2014}. Solved with SciPy. \\
+Plan & Mixed-integer linear program on each of the four forecasts (the ensemble by default, the others to compare): 90\% round trip, one cycle a day \citep{bradbury2014}. Solved with SciPy. \\
 Risk & EWMA-filtered historical simulation of the forecast errors \citep{hull1998,riskmetrics1996}, a 5\% floor and the average below it, the Kupiec test \citep{kupiec1995}, and four stress tests. \\
 Loss limit & A limit on the worst 5\% of scenarios \citep{rockafellar2000}. Tested and not used. \\
 Costs & Nord Pool fee and an assumed wear cost in the plan; Energinet's tariffs as a side case. \\

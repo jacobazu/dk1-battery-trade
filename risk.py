@@ -8,11 +8,11 @@ K_LONG = 250   # days of past errors
 MIN_DAYS = 48  # days with errors needed in the 60 before
 
 
-def error_matrix(fc):
-    """Days x 24 matrix of errors (actual - ensemble)."""
+def error_matrix(fc, col="ensemble"):
+    """Days x 24 matrix of errors (actual - forecast)."""
     dates = np.sort(fc["date"].unique())
     E = np.full((len(dates), 24), np.nan)
-    E[np.searchsorted(dates, fc["date"]), fc["hour"]] = fc["actual"] - fc["ensemble"]
+    E[np.searchsorted(dates, fc["date"]), fc["hour"]] = fc["actual"] - fc[col]
     return dates, E
 
 

@@ -1,6 +1,6 @@
 # DK1 battery trading
 
-Python on top of my [DK1 price forecasts](https://github.com/jacobazu/dk1-price-forecasting) (R). It plans a 2 MWh / 1 MW battery from each day's forecast and measures the risk of the plan. The plan uses the ensemble; the same battery is also planned on each of the three models alone, to compare.
+Python on top of my [DK1 price forecasts](https://github.com/jacobazu/dk1-price-forecasting) (R). It plans a 2 MWh / 1 MW battery from each day's forecast and measures the risk of the plan. On the dashboard you pick the forecast: the ensemble (the default) or one of the three models alone, to compare.
 
 Dashboard: [jacobazu.github.io/dk1-battery-trade](https://jacobazu.github.io/dk1-battery-trade/)
 
