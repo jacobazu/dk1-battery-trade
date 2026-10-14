@@ -4,6 +4,8 @@ Python on top of my [DK1 price forecasts](https://github.com/jacobazu/dk1-price-
 
 Dashboard: [jacobazu.github.io/dk1-battery-trade](https://jacobazu.github.io/dk1-battery-trade/)
 
+Methods: [one page (PDF)](notes/method.pdf)
+
 ## The real test
 
 A backtest shows that the battery would have earned money. It doesn't show that it will. I made my choices with the backtest period in view, so the backtest is probably a bit too good. The live plans are made from forecasts saved before the auction, so they can't be adjusted afterwards. That's the interesting part, so the dashboard's main page only shows the P&L since launch on 13 Oct 2026. The backtest has its own page.
