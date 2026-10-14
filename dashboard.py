@@ -17,6 +17,14 @@ from stress import stress_tests
 ORANGE, GREEN, RED, BLUE = "#f97316", "#16a34a", "#dc2626", "#0ea5e9"
 INK, GREY, LINE, GRID, BEIGE = "#1f2328", "#6b7280", "#e5ddd3", "#f1ebe4", "#cfc6bb"
 FONT = "IBM Plex Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
+# github icon, the same as on the other two dashboards (bootstrap icons)
+GITHUB_ICON = ('<svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 '
+               '3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94'
+               '-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78'
+               '-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27'
+               's1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 '
+               '3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>'
+               '</svg>')
 PLOTLY_JS = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
 LAUNCH = pd.Timestamp("2026-10-13")  # first day traded on a live forecast
 COSTS = costs()  # nord pool fee + wear
@@ -370,8 +378,9 @@ def render(title, tabs, link, banner=""):
   nav {{ display: flex; flex-wrap: wrap; }}
   nav button {{ font: 500 14px {FONT}; color: {GREY}; background: none; border: 0; padding: 14px 10px; cursor: pointer; }}
   nav button.active {{ color: {INK}; box-shadow: inset 0 -2px 0 {ORANGE}; }}
-  header .links {{ margin-left: auto; font-size: 13px; display: flex; gap: 16px; }}
+  header .links {{ margin-left: auto; font-size: 13px; display: flex; align-items: center; gap: 16px; }}
   header .links a {{ color: {GREY}; }}
+  header .links svg {{ display: block; }}
   .banner {{ background: #fff7ed; border-bottom: 1px solid #fed7aa; color: #9a3412; font-size: 14px;
             padding: 8px 20px; }}
   main {{ max-width: 1280px; margin: 0 auto; padding: 18px 16px 40px; }}
@@ -401,7 +410,7 @@ def render(title, tabs, link, banner=""):
 </head>
 <body>
 <header><h1>{title}</h1><nav>{nav}</nav>
-<span class="links">{link}<a href="https://github.com/jacobazu/dk1-battery-trade">GitHub</a></span></header>
+<span class="links">{link}<a href="https://github.com/jacobazu/dk1-battery-trade" aria-label="GitHub">{GITHUB_ICON}</a></span></header>
 {banner}
 <main>{panes}</main>
 <footer>Updated {updated}</footer>
