@@ -10,8 +10,8 @@ from scipy.stats import binom
 
 from battery import SETUP, battery_schedule
 from costs import FEE, WEAR, cost_of, costs
-from data import load_all, wide
-from risk import ALPHA, error_matrix, error_scenarios, ewma_vol, has_history, tail_stats
+from data import MODELS, load_all, wide
+from risk import ALPHA, error_matrix, error_scenarios, ewma_vol, has_history, nw_test, tail_stats
 from stress import stress_tests
 
 ORANGE, GREEN, RED, BLUE = "#f97316", "#16a34a", "#dc2626", "#0ea5e9"
@@ -27,6 +27,8 @@ GITHUB_ICON = ('<svg width="18" height="18" viewBox="0 0 16 16" fill="currentCol
                '</svg>')
 PLOTLY_JS = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
 LAUNCH = pd.Timestamp("2026-10-13")  # first day traded on a live forecast
+LABELS = {"ensemble": "Ensemble", "bmtx": "BMT-X", "learx": "LEAR-X", "xgbx": "XGBoost-X"}
+COLORS = {"ensemble": ORANGE, "bmtx": "#7c3aed", "learx": BLUE, "xgbx": GREEN}  # as on the price dashboard
 COSTS = costs()  # nord pool fee + wear
 
 
@@ -65,6 +67,16 @@ def kupiec_p(misses, n, alpha=ALPHA):
     return sum(binom.pmf(x, n, alpha) for x in range(n + 1) if lr(x) >= obs - 1e-9)
 
 
+def holm(p):
+    """Holm-adjusted p-values."""
+    p = np.asarray(p, float)
+    o = np.argsort(p)
+    adj = np.minimum(1, np.maximum.accumulate(p[o] * (len(p) - np.arange(len(p)))))
+    out = np.empty(len(p))
+    out[o] = adj
+    return out
+
+
 def style(fig, height):
     fig.update_layout(
         height=height, margin=dict(l=10, r=10, t=10, b=10), font=dict(family=FONT, color=GREY, size=12),
@@ -81,6 +93,7 @@ fc = load_all()
 dates, E = error_matrix(fc)
 sig = ewma_vol(E)
 F, A = wide(fc, "ensemble"), wide(fc, "actual")
+FM = {m: wide(fc, m) for m in MODELS[1:]}
 
 rows = []
 for i in range(len(dates)):
@@ -93,14 +106,20 @@ for i in range(len(dates)):
     st = tail_stats(f @ q + S @ q - cost)
     known = not np.isnan(a).any()
     qp = battery_schedule(a, costs=COSTS) if known else None
-    rows.append({"date": pd.Timestamp(dates[i]), "live": pd.Timestamp(dates[i]) >= LAUNCH,
-                 "expected": st["expected"], "floor": st["floor"], "cost": cost,
-                 "gross": a @ q if known else np.nan,
-                 "realized": a @ q - cost if known else np.nan,
-                 "perfect": a @ qp - cost_of(qp, COSTS) if known else np.nan,
-                 "q": q, "f": f, "S": S})
+    row = {"date": pd.Timestamp(dates[i]), "live": pd.Timestamp(dates[i]) >= LAUNCH,
+           "expected": st["expected"], "floor": st["floor"], "cost": cost,
+           "gross": a @ q if known else np.nan,
+           "realized": a @ q - cost if known else np.nan,
+           "perfect": a @ qp - cost_of(qp, COSTS) if known else np.nan,
+           "q": q, "f": f, "S": S}
+    # the same battery planned on each model alone, to compare
+    for m, Fm in FM.items():
+        qm = battery_schedule(Fm[i], costs=COSTS) if known and not np.isnan(Fm[i]).any() else None
+        row[m] = a @ qm - cost_of(qm, COSTS) if qm is not None else np.nan
+    rows.append(row)
 days = pd.DataFrame(rows)
 done = days.dropna(subset=["realized"])
+done = done.assign(ensemble=done["realized"])
 nxt = days.iloc[-1]
 
 # tomorrow
@@ -160,6 +179,39 @@ fig.update_yaxes(autorange="reversed", gridcolor="rgba(0,0,0,0)")
 fig.update_xaxes(ticksuffix=" €", zeroline=True, zerolinecolor=BEIGE, showgrid=True, gridcolor=GRID)
 stress_chart = style(fig, 330)
 
+def compare(d, tests):
+    """One row per forecast: P&L after costs, share of perfect, and the daily difference to the ensemble."""
+    rows, ps = [], []
+    for m in MODELS:
+        x = d.dropna(subset=[m])
+        r = {"model": m, "days": len(x), "total": x[m].sum(), "share": x[m].sum() / x["perfect"].sum(),
+             "loss_days": int((x[m] < 0).sum()), "diff": np.nan, "p": np.nan}
+        if tests and m != "ensemble":
+            r["diff"], r["p"] = nw_test((x[m] - x["ensemble"]).to_numpy())
+            ps.append(r["p"])
+        rows.append(r)
+    out = pd.DataFrame(rows)
+    if tests:
+        out.loc[out["model"] != "ensemble", "p"] = holm(ps)
+    return out
+
+
+def pval(p):
+    return "< 0.001" if p < 0.001 else f"{p:.3f}"
+
+
+def compare_table(c, tests):
+    head = ("<tr><th>Forecast</th><th class='n'>Days</th><th class='n'>After costs</th><th class='n'>Share of perfect</th>"
+            + ("<th class='n'>Loss days</th><th class='n'>vs ensemble, a day</th>" if tests else "") + "</tr>")
+    body = "".join(
+        f"<tr><td>{'<b>' + LABELS[r.model] + '</b> (the plan)' if r.model == 'ensemble' else LABELS[r.model]}</td>"
+        f"<td class='n'>{r.days}</td><td class='n'>{eur(r.total)}</td><td class='n'>{r.share:.0%}</td>"
+        + (f"<td class='n'>{r.loss_days}</td><td class='n'>"
+           f"{'' if np.isnan(r.p) else f'{r.diff:+.1f} € (p {pval(r.p)})'}</td>" if tests else "") + "</tr>"
+        for r in c.itertuples())
+    return f"<table>{head}{body}</table>"
+
+
 # live: every day traded on a live forecast since launch
 lv, bt = done[done["live"]], done[~done["live"]]
 pnl = lv["realized"].cumsum()
@@ -175,8 +227,11 @@ cum_x = [start] + list(lv["date"])
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=cum_x, y=[0] + list(lv["perfect"].cumsum()), mode="lines+markers", name="Perfect foresight",
                          line=dict(color=BEIGE, width=2, dash="dot"), hovertemplate="%{y:,.0f} €"))
-fig.add_trace(go.Scatter(x=cum_x, y=[0] + list(pnl), mode="lines+markers", name="P&L", line=dict(color=ORANGE, width=3),
-                         hovertemplate="%{y:,.0f} €"))
+for m in MODELS[1:]:
+    fig.add_trace(go.Scatter(x=cum_x, y=[0] + list(lv[m].fillna(0).cumsum()), mode="lines+markers", name=LABELS[m],
+                             line=dict(color=COLORS[m], width=1.5), marker=dict(size=5), hovertemplate="%{y:,.0f} €"))
+fig.add_trace(go.Scatter(x=cum_x, y=[0] + list(pnl), mode="lines+markers", name="Ensemble (the plan)",
+                         line=dict(color=ORANGE, width=3), hovertemplate="%{y:,.0f} €"))
 fig.update_yaxes(ticksuffix=" €", rangemode="tozero")
 fig.update_xaxes(**x_axis)
 pnl_chart = style(fig, 320)
@@ -194,15 +249,21 @@ live_rows = "".join(
     f"<td>{'below the floor' if r.realized < r.floor else ''}</td></tr>"
     for r in lv.iloc[::-1].itertuples())
 
+live_cmp = compare_table(compare(lv, tests=False), tests=False) if len(lv) else "<p class='note'>Starts after the first day.</p>"
+
 # backtest track record
 cum = bt.assign(battery=bt["realized"].cumsum(), perfect_c=bt["perfect"].cumsum())
 fig = go.Figure()
 fig.add_trace(go.Scatter(x=cum["date"], y=cum["perfect_c"], mode="lines", line=dict(color=BEIGE, width=2),
                          name="Perfect foresight", hovertemplate="%{y:,.0f} €"))
-fig.add_trace(go.Scatter(x=cum["date"], y=cum["battery"], mode="lines", line=dict(color=ORANGE, width=2),
-                         name="Plan on the forecast", hovertemplate="%{y:,.0f} €"))
+for m in MODELS[1:]:
+    fig.add_trace(go.Scatter(x=cum["date"], y=cum[m].fillna(0).cumsum(), mode="lines", line=dict(color=COLORS[m], width=1.5),
+                             name=LABELS[m], hovertemplate="%{y:,.0f} €"))
+fig.add_trace(go.Scatter(x=cum["date"], y=cum["battery"], mode="lines", line=dict(color=ORANGE, width=2.5),
+                         name="Ensemble (the plan)", hovertemplate="%{y:,.0f} €"))
 fig.update_yaxes(ticksuffix=" €")
 track_chart = style(fig, 380)
+bt_cmp = compare_table(compare(bt, tests=True), tests=True)
 
 month = bt.groupby(bt["date"].dt.to_period("M")).agg(realized=("realized", "sum"), perfect=("perfect", "sum"))
 fig = go.Figure(go.Bar(x=month.index.strftime("%b %Y"), y=month["realized"] / month["perfect"] * 100,
@@ -270,7 +331,6 @@ def card(title, body, extra=""):
 
 
 day = nxt["date"].strftime("%a %d %b")
-backtest_link = "<a class='bt-link' href='backtest.html'>Want to see the backtest? Click here &rarr;</a>"
 live_tabs = {
     "Plan": f"""
 <div class='kpis'>
@@ -292,25 +352,28 @@ live_tabs = {
 </div>
 <div class='grid2'>
 <div>{card("P&L since launch, added up", pnl_chart)}{card("P&L per day", daily_chart)}</div>
-{card("Every day since launch", "<table><tr><th>Day</th><th class='n'>Expected</th><th class='n'>1 in 20 floor</th>"
+<div>{card("Each forecast, the same battery", live_cmp + "<p class='note'>The plan uses the ensemble. The same "
+      "battery is also planned on each model alone, to compare.</p>")}
+{card("Every day since launch, the plan", "<table><tr><th>Day</th><th class='n'>Expected</th><th class='n'>1 in 20 floor</th>"
       f"<th class='n'>Costs</th><th class='n'>Earned</th><th class='n'>Perfect</th><th></th></tr>{live_rows}</table>"
       "<p class='note'>Planned the day before on the live forecast, paid the real price. "
-      f"After the Nord Pool fee ({FEE} €/MWh) and wear ({WEAR:.0f} €/MWh sold). No grid tariffs or taxes.</p>")}
-</div>
-<p>{backtest_link}</p>""",
+      f"After the Nord Pool fee ({FEE} €/MWh) and wear ({WEAR:.0f} €/MWh sold). No grid tariffs or taxes.</p>")}</div>
+</div>""",
     "Stress tests": f"""
 {card(f"What {day} earns if it goes like this", stress_chart)}
 <p class='note'>Worst past day: the worst forecast error of the last 250 days. Peak doesn't come: selling hours
 fall to the median price. Negative prices: -50 €/MWh 11-15. Errors x3: the worst 5% with errors three times as big.</p>""",
     "Method": f"""
 {card("How it works", f'''
-<p>The forecast is the ensemble from my <a href="https://github.com/jacobazu/dk1-price-forecasting">DK1 price
-forecasts</a> (R), made before the noon auction the day before.</p>
+<p>The plan uses the ensemble, the average of BMT-X, LEAR-X and XGBoost-X, from my
+<a href="https://github.com/jacobazu/dk1-price-forecasting">DK1 price forecasts</a> (R), made before the noon auction
+the day before. The same battery is also planned on each model alone, to compare. Risk and stress tests are for the
+ensemble plan.</p>
 <p>The plan is a mixed-integer program (scipy): 2 MWh / 1 MW, 90% round trip, one cycle a day. It includes the
 Nord Pool fee and {WEAR:.0f} €/MWh wear, so it only trades when the spread pays for them. Without costs it gives the same
 plan as the R version on 363 of 375 days.</p>
 <p>Risk: past days' 24-hour forecast errors, scaled by an EWMA of their volatility, run through the plan.</p>
-<p>The P&L counts from {LAUNCH:%d %b %Y}. {backtest_link}</p>''')}""",
+<p>The P&L counts from {LAUNCH:%d %b %Y}.</p>''')}""",
 }
 
 backtest_tabs = {
@@ -321,6 +384,9 @@ backtest_tabs = {
 {kpi("Days with a loss", str(int((bt['realized'] < 0).sum())), f"Worst: {eur(bt['realized'].min())}", RED)}
 </div>
 {card("What the battery would have earned after costs, added up", track_chart)}
+{card("Each forecast, the same battery", bt_cmp + "<p class='note'>The plan uses the ensemble. The others are the "
+      "same battery planned on each model alone. Difference to the ensemble per day, p: Newey-West, Holm for the "
+      "three.</p>")}
 {card("Share of perfect foresight by month", month_chart)}""",
     "Risk": f"""
 <div class='kpis'>
@@ -404,7 +470,6 @@ def render(title, tabs, link, banner=""):
   p {{ color: #3b3f45; }}
   .note {{ color: {GREY}; font-size: 13px; max-width: 900px; }}
   a {{ color: #c2410c; }}
-  .bt-link {{ font-weight: 500; }}
   footer {{ color: {GREY}; font-size: 12px; text-align: center; padding-bottom: 24px; }}
 </style>
 </head>

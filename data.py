@@ -3,13 +3,14 @@ import pandas as pd
 
 REPO = "https://raw.githubusercontent.com/jacobazu/dk1-price-forecasting/master/"
 PARTS = ["bmtx", "learx", "xgbx"]  # the ensemble is their average
+MODELS = ["ensemble"] + PARTS      # the plan uses the ensemble, the others are compared
 
 
 def load_backtest():
-    """Backtest days: date, hour, actual price and the ensemble forecast."""
+    """Backtest days: date, hour, actual price and the four forecasts."""
     fc = pd.read_csv(REPO + "results/backtest_forecasts.csv", parse_dates=["date"])
     fc["ensemble"] = fc[PARTS].mean(axis=1)
-    return fc[["date", "hour", "actual", "ensemble"]].sort_values(["date", "hour"])
+    return fc[["date", "hour", "actual"] + MODELS].sort_values(["date", "hour"])
 
 
 def live_prices():
@@ -28,7 +29,7 @@ def load_live(after):
     lv["ensemble"] = lv[PARTS].mean(axis=1)
     lv = lv.dropna(subset=["ensemble"]).groupby("date").filter(lambda d: len(d) == 24)
     lv = lv.merge(live_prices().rename(columns={"price": "actual"}), on=["date", "hour"], how="left")
-    return lv[["date", "hour", "actual", "ensemble"]]
+    return lv[["date", "hour", "actual"] + MODELS]
 
 
 def load_all():

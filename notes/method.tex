@@ -24,11 +24,11 @@ A 2\,MWh / 1\,MW battery planned every day on my DK1 price forecast, with its ri
 \begin{center}\small
 \begin{tabularx}{\linewidth}{@{}lL@{}}
 \toprule
-Plan & Mixed-integer linear program on the price forecast: 90\% round trip, one cycle a day \citep{bradbury2014}. Solved with SciPy. \\
+Plan & Mixed-integer linear program on the ensemble forecast, and on each model alone to compare: 90\% round trip, one cycle a day \citep{bradbury2014}. Solved with SciPy. \\
 Risk & EWMA-filtered historical simulation of the forecast errors \citep{hull1998,riskmetrics1996}, a 5\% floor and the average below it, the Kupiec test \citep{kupiec1995}, and four stress tests. \\
 Loss limit & A limit on the worst 5\% of scenarios \citep{rockafellar2000}. Tested and not used. \\
 Costs & Nord Pool fee and an assumed wear cost in the plan; Energinet's tariffs as a side case. \\
-Tests & Daily differences tested with a Newey--West variance \citep{newey1987}. \\
+Tests & Daily differences tested with a Newey--West variance \citep{newey1987}; Holm for the three models \citep{holm1979}. \\
 Rules & The plan only uses the forecast saved before the auction. Limits, cost cases and tests are set before running. \\
 \bottomrule
 \end{tabularx}
@@ -37,6 +37,7 @@ Rules & The plan only uses the forecast saved before the auction. Limits, cost c
 \begin{thebibliography}{99}\small
 \bibitem[Bradbury et~al.(2014)]{bradbury2014} Bradbury, K., Pratson, L. and Pati\~no-Echeverri, D. (2014). Economic viability of energy storage systems based on price arbitrage potential in real-time U.S. electricity markets. \textit{Applied Energy}.
 \bibitem[Hull and White(1998)]{hull1998} Hull, J. and White, A. (1998). Incorporating volatility updating into the historical simulation method for value-at-risk. \textit{Journal of Risk}.
+\bibitem[Holm(1979)]{holm1979} Holm, S. (1979). A simple sequentially rejective multiple test procedure. \textit{Scandinavian Journal of Statistics}.
 \bibitem[J.P. Morgan/Reuters(1996)]{riskmetrics1996} J.P. Morgan/Reuters (1996). \textit{RiskMetrics Technical Document}.
 \bibitem[Kupiec(1995)]{kupiec1995} Kupiec, P. (1995). Techniques for verifying the accuracy of risk measurement models. \textit{Journal of Derivatives}.
 \bibitem[Newey and West(1987)]{newey1987} Newey, W. K. and West, K. D. (1987). A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix. \textit{Econometrica}.
