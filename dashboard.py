@@ -119,6 +119,18 @@ latest = fc["date"].max()
 day = latest.strftime("%a %d %b")
 runs = {m: run(m) for m in MODELS}
 
+# tomorrow's plan is missing until the price forecast is saved, and for good if that didn't happen before the auction
+now_dk = pd.Timestamp.now(tz="Europe/Copenhagen")
+tomorrow = now_dk.normalize().tz_localize(None) + pd.Timedelta(days=1)
+missing = ""
+if latest < tomorrow:
+    late = now_dk.hour >= 12
+    why = ("The price forecast wasn't made before the noon auction, so there is no plan for that day." if late
+           else "It is made once the price forecast is saved, at about 10:30.")
+    missing = (f"<div class='card' style='border-left:4px solid {RED}'><div class='card-title'>No plan for "
+               f"{tomorrow:%a %d %b}{'' if late else ' yet'}</div><p class='note'>{why} Below is the last plan, "
+               f"for {day}.</p></div>")
+
 # what each plan earned, side by side
 cmp_days = runs["ensemble"].dropna(subset=["realized"])[["date", "live", "perfect"]]
 for m in MODELS:
@@ -267,6 +279,7 @@ fall to the median price. Negative prices: -50 €/MWh 11-15. Errors x3: the wor
         live["Plan"] = live["Stress tests"] = card(f"No {label} forecast for {day}",
                                                    "<p class='note'>The model didn't run for this day. Pick another "
                                                    "forecast at the top.</p>")
+    live["Plan"] = missing + live["Plan"]
 
     # live: every day traded on a live forecast since launch
     lv = done[done["live"]]
