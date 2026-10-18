@@ -16,3 +16,9 @@ A backtest shows that the battery would have earned money. It doesn't show that 
 - Wear: 20 €/MWh sold, my assumption. A system cost about $177/kWh in Europe in 2025 ([BNEF](https://www.energy-storage.news/?p=92133)). Over about 6,000 full cycles, also my assumption, that is about $30/MWh. The backtest also tries 10 and 40. Pricing wear per MWh in the plan is how [Modo Energy](https://ercotforecastdocs.modoenergy.com/docs/battery-degradation) does it.
 - Energinet's tariffs, side case only: 11.5 øre/kWh charging, 1.03 øre/kWh discharging ([tariff catalogue 2026](https://www.energinet.dk/media/ikylsqle/energinets-tarifkatalog-2026.pdf)). It isn't clear a battery like this pays them. Local grid tariffs and taxes are left out.
 - DKK to EUR at 7.46.
+
+## License
+
+Code: [MIT](LICENSE). Not trading advice.
+
+Prices from [Energi Data Service](https://www.energidataservice.dk) (Energinet), used under "Conditions for use of Danish public-sector data". Not covered by the MIT License or endorsed by Energinet.
