@@ -535,7 +535,7 @@ def render(title, tabs, link, banner=""):
 </head>
 <body data-model="ensemble">
 <header><h1>{title}</h1><nav>{nav}</nav>
-<span class="links">{link}<a href="https://github.com/jacobazu/dk1-battery-trade" aria-label="GitHub">{GITHUB_ICON}</a></span></header>
+<span class="links"><a href="https://jacobazu.github.io/">jacobazu.github.io</a>{link}<a href="https://github.com/jacobazu/dk1-battery-trade" aria-label="GitHub">{GITHUB_ICON}</a></span></header>
 {banner}
 <main><div class="models"><span>Forecast</span>{picker}</div>{panes}</main>
 <footer>Updated {updated}</footer>
