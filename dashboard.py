@@ -283,6 +283,8 @@ fall to the median price. Negative prices: -50 €/MWh 11-15. Errors x3: the wor
 
     # live: every day traded on a live forecast since launch
     lv = done[done["live"]]
+    bt_all = done[~done["live"]]
+    bt_share, bt_n = bt_all["realized"].sum() / bt_all["perfect"].sum(), len(bt_all)
     pnl = lv["realized"].cumsum()
     drawdown = (pnl - np.maximum.accumulate(np.r_[0, pnl.to_numpy()])[1:]).min() if len(lv) else 0.0
     lv_miss = int((lv["realized"] < lv["floor"]).sum())
@@ -319,15 +321,17 @@ fall to the median price. Negative prices: -50 €/MWh 11-15. Errors x3: the wor
 <div class='kpis'>
 {kpi(f"P&L since launch, after costs ({label})", eur(pnl.iloc[-1]) if len(lv) else "-", f"{len(lv)} day{'s' * (len(lv) != 1)} since {LAUNCH:%d %b %Y}, before costs {eur(lv['gross'].sum())}" if len(lv) else "", GREEN)}
 {kpi("Last day", eur(lv['realized'].iloc[-1]) if len(lv) else "-", f"{lv['date'].iloc[-1]:%a %d %b}" if len(lv) else "", ORANGE)}
-{kpi("Share of perfect foresight", f"{lv['realized'].sum() / lv['perfect'].sum():.0%}" if len(lv) else "-", "What a plan on the real prices would make", BLUE)}
-{kpi("Max drawdown", eur(drawdown), f"Days below the 1 in 20 floor: {lv_miss} of {len(lv)}", RED)}
+{kpi("Share of perfect foresight", f"{lv['realized'].sum() / lv['perfect'].sum():.0%}" if len(lv) else "-", f"{len(lv)} live days. Backtest: {bt_share:.0%} over {bt_n} days", BLUE)}
+{kpi("Max drawdown", eur(drawdown), f"{len(lv)} live days. Days below the 1 in 20 floor: {lv_miss}", RED)}
 </div>
+<p class='note'>A few weeks of live days say little: the share of perfect foresight and the drawdown can change a lot
+before there are a few months. The backtest has {bt_n} days.</p>
 <div class='grid2'>
 <div>{card("P&L since launch, added up", pnl_chart)}{card(f"P&L per day ({label})", daily_chart)}</div>
 <div>{card("Each forecast, the same battery", cmp_html)}
 {card(f"Every day since launch ({label})", "<table><tr><th>Day</th><th class='n'>Expected</th><th class='n'>1 in 20 floor</th>"
       f"<th class='n'>Costs</th><th class='n'>Earned</th><th class='n'>Perfect</th><th></th></tr>{live_rows}</table>"
-      "<p class='note'>Planned the day before on the live forecast, paid the real price. "
+      "<p class='note'>Planned the day before on the live forecast and scored at the real day-ahead prices. "
       f"After the Nord Pool fee ({FEE} €/MWh) and wear ({WEAR:.0f} €/MWh sold). No grid tariffs or taxes.</p>")}</div>
 </div>"""
 
@@ -419,7 +423,9 @@ fig.update_yaxes(ticksuffix="%")
 fig.update_xaxes(title_text="Loss limit")
 limit_chart = style(fig, 300)
 
-updated = datetime.now(timezone.utc).strftime("%d %b %Y %H:%M UTC")
+now = datetime.now(timezone.utc)
+updated = now.strftime("%d %b %Y %H:%M UTC")
+built = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 per_model = lambda page, tab: {m: pages[m][page][tab] for m in MODELS}
 
 live_tabs = {
@@ -531,6 +537,8 @@ def render(title, tabs, link, banner=""):
   .note {{ color: {GREY}; font-size: 13px; max-width: 900px; }}
   a {{ color: #c2410c; }}
   footer {{ color: {GREY}; font-size: 12px; text-align: center; padding-bottom: 24px; }}
+  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fef2f2; color: #991b1b;
+           border-top: 1px solid #fecaca; font-size: 14px; padding: 10px 20px; text-align: center; }}
 </style>
 </head>
 <body data-model="ensemble">
@@ -539,7 +547,17 @@ def render(title, tabs, link, banner=""):
 {banner}
 <main><div class="models"><span>Forecast</span>{picker}</div>{panes}</main>
 <footer>Updated {updated}</footer>
+<div id="stale" class="stale" data-built="{built}" hidden></div>
 <script>
+// the page is rebuilt every day. if a visitor sees one older than 30 hours, say so
+(() => {{
+  const el = document.getElementById("stale"), built = new Date(el.dataset.built);
+  if (Date.now() - built > 30 * 3600 * 1000) {{
+    el.textContent = "Not updated since " + built.toLocaleString("en-GB", {{ timeZone: "Europe/Copenhagen",
+      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }}) + " (Danish time). The daily update has not run.";
+    el.hidden = false;
+  }}
+}})();
 const resize = () => {{
   // no forecast buttons on tabs that are the same for every forecast
   document.querySelector(".models").style.display = document.querySelector("section.active.shared") ? "none" : "";
@@ -570,7 +588,8 @@ if (saved && document.querySelector(`.models button[data-model="${{saved}}"]`)) 
 
 Path("docs").mkdir(exist_ok=True)
 Path("docs/index.html").write_text(
-    render("DK1 battery trading", live_tabs, "<a href='backtest.html'>Backtest</a>"), encoding="utf-8")
+    render("DK1 battery trading", live_tabs, "<a href='backtest.html'>Backtest</a>",
+           "<div class='banner'>Paper trading: a simulated 2 MWh battery, no physical asset.</div>"), encoding="utf-8")
 Path("docs/backtest.html").write_text(
     render("DK1 battery trading: backtest", backtest_tabs, "<a href='index.html'>&larr; Live</a>",
            f"<div class='banner'>Backtest, {bt_span}. Each day was planned on a forecast made without that day's "
