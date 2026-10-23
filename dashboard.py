@@ -580,8 +580,7 @@ if (saved && document.querySelector(`.models button[data-model="${{saved}}"]`)) 
 
 Path("docs").mkdir(exist_ok=True)
 Path("docs/index.html").write_text(
-    render("DK1 battery trading", live_tabs, "<a href='backtest.html'>Backtest</a>",
-           "<div class='banner'>Paper trading: a simulated 2 MWh battery, no physical asset.</div>"), encoding="utf-8")
+    render("DK1 battery trading", live_tabs, "<a href='backtest.html'>Backtest</a>"), encoding="utf-8")
 Path("docs/backtest.html").write_text(
     render("DK1 battery trading: backtest", backtest_tabs, "<a href='index.html'>&larr; Live</a>",
            f"<div class='banner'>Backtest, {bt_span}. Each day was planned on a forecast made without that day's "
