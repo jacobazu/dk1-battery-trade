@@ -17,7 +17,7 @@ from stress import stress_tests
 ORANGE, GREEN, RED, BLUE = "#f97316", "#16a34a", "#dc2626", "#0ea5e9"
 INK, GREY, LINE, GRID, BEIGE = "#1f2328", "#6b7280", "#e5ddd3", "#f1ebe4", "#cfc6bb"
 FONT = "IBM Plex Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
-# github icon, the same as on the other two dashboards (bootstrap icons)
+# github icon
 GITHUB_ICON = ('<svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 '
                '3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94'
                '-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78'
@@ -119,7 +119,7 @@ latest = fc["date"].max()
 day = latest.strftime("%a %d %b")
 runs = {m: run(m) for m in MODELS}
 
-# tomorrow's plan is missing until the price forecast is saved, and for good if that didn't happen before the auction
+# no plan until the price forecast is saved
 now_dk = pd.Timestamp.now(tz="Europe/Copenhagen")
 tomorrow = now_dk.normalize().tz_localize(None) + pd.Timedelta(days=1)
 missing = ""
@@ -273,8 +273,8 @@ def model_pages(m):
 </div>"""
         live["Stress tests"] = f"""
 {card(f"What {day} earns on the {label} plan if it goes like this", stress_chart)}
-<p class='note'>Worst past day: the worst forecast error of the last 250 days. Peak doesn't come: selling hours
-fall to the median price. Negative prices: -50 €/MWh 11-15. Errors x3: the worst 5% with errors three times as big.</p>"""
+<p class='note'>Worst past day: the worst error of the last 250 days. Peak doesn't come: selling hours at the median
+price. Negative prices: -50 €/MWh 11-15. Errors x3: the worst 5%, three times as big.</p>"""
     else:
         live["Plan"] = live["Stress tests"] = card(f"No {label} forecast for {day}",
                                                    "<p class='note'>The model didn't run for this day. Pick another "
@@ -289,7 +289,6 @@ fall to the median price. Negative prices: -50 €/MWh 11-15. Errors x3: the wor
     drawdown = (pnl - np.maximum.accumulate(np.r_[0, pnl.to_numpy()])[1:]).min() if len(lv) else 0.0
     lv_miss = int((lv["realized"] < lv["floor"]).sum())
 
-    # start at 0 the day before launch, show at least a week
     DAY = pd.Timedelta(days=1)
     start = LAUNCH - DAY
     x_range = [start - DAY / 2, max(lc["date"].max() if len(lc) else LAUNCH, LAUNCH + 6 * DAY) + DAY / 2]
@@ -324,15 +323,13 @@ fall to the median price. Negative prices: -50 €/MWh 11-15. Errors x3: the wor
 {kpi("Share of perfect foresight", f"{lv['realized'].sum() / lv['perfect'].sum():.0%}" if len(lv) else "-", f"{len(lv)} live days. Backtest: {bt_share:.0%} over {bt_n} days", BLUE)}
 {kpi("Max drawdown", eur(drawdown), f"{len(lv)} live days. Days below the 1 in 20 floor: {lv_miss}", RED)}
 </div>
-<p class='note'>A few weeks of live days say little: the share of perfect foresight and the drawdown can change a lot
-before there are a few months. The backtest has {bt_n} days.</p>
+<p class='note'>With few live days these numbers can still change a lot. The backtest has {bt_n} days.</p>
 <div class='grid2'>
 <div>{card("P&L since launch, added up", pnl_chart)}{card(f"P&L per day ({label})", daily_chart)}</div>
 <div>{card("Each forecast, the same battery", cmp_html)}
 {card(f"Every day since launch ({label})", "<table><tr><th>Day</th><th class='n'>Expected</th><th class='n'>1 in 20 floor</th>"
       f"<th class='n'>Costs</th><th class='n'>Earned</th><th class='n'>Perfect</th><th></th></tr>{live_rows}</table>"
-      "<p class='note'>Planned the day before on the live forecast and scored at the real day-ahead prices. "
-      f"After the Nord Pool fee ({FEE} €/MWh) and wear ({WEAR:.0f} €/MWh sold). No grid tariffs or taxes.</p>")}</div>
+      f"<p class='note'>After the Nord Pool fee ({FEE} €/MWh) and wear ({WEAR:.0f} €/MWh sold).</p>")}</div>
 </div>"""
 
     # backtest track record
@@ -434,15 +431,13 @@ live_tabs = {
     "Stress tests": per_model(0, "Stress tests"),
     "Method": f"""
 {card("How it works", f'''
-<p>Pick the forecast at the top: the ensemble (the default, the average of BMT-X, LEAR-X and XGBoost-X) or one model
-alone, all from my <a href="https://github.com/jacobazu/dk1-price-forecasting">DK1 price forecasts</a> (R), made before
-the noon auction the day before. The plan, P&L, risk and stress tests then use that forecast. The cost and loss limit
-backtests are for the ensemble.</p>
-<p>The plan is a mixed-integer program (scipy): 2 MWh / 1 MW, 90% round trip, one cycle a day. It includes the
-Nord Pool fee and {WEAR:.0f} €/MWh wear, so it only trades when the spread pays for them. Without costs it gives the same
-plan as the R version on 363 of 375 days.</p>
-<p>Risk: past days' 24-hour forecast errors, scaled by an EWMA of their volatility, run through the plan.</p>
-<p>The P&L counts from {LAUNCH:%d %b %Y}.</p>''')}""",
+<p>A simulated battery, no physical asset. Each day it is planned on one of my
+<a href="https://github.com/jacobazu/dk1-price-forecasting">DK1 price forecasts</a>, made before the noon auction, and
+scored at the real day-ahead prices. Pick the forecast at the top; the ensemble is the default.</p>
+<p>The plan is a mixed-integer program: 2 MWh / 1 MW, 90% round trip, one cycle a day. It includes the Nord Pool fee and
+{WEAR:.0f} €/MWh wear, so it only trades when the spread pays for them. No grid tariffs or taxes.</p>
+<p>Risk: past days' forecast errors, scaled by an EWMA of their volatility, run through the plan. The P&L counts from
+{LAUNCH:%d %b %Y}.</p>''')}""",
 }
 
 backtest_tabs = {
@@ -459,17 +454,15 @@ backtest_tabs = {
       "<table><tr><th>Costs</th><th>Plan</th><th class='n'>Costs</th><th class='n'>After costs</th>"
       "<th class='n'>MWh sold a day</th><th class='n'>Days no trade</th><th class='n'>Loss days</th>"
       f"<th class='n'>In the plan vs after (per day)</th></tr>{cost_rows}</table>"
-      "<p>After the fact: costs taken off afterwards. In the plan: it only trades when the spread pays for them. "
-      "At 20 €/MWh wear the total is the same, but loss days halve. The higher the costs, the more it pays to plan "
-      "with them. Wear is an assumption, sources in the README. p: Newey-West.</p>")}""",
+      "<p class='note'>After the fact: costs taken off afterwards. In the plan: it only trades when the spread pays "
+      "for them. Wear is an assumption, sources in the README. p: Newey-West.</p>")}""",
     "Loss limit": f"""
 <div class='grid2'>
 {card("Revenue given up for each loss limit", limit_chart)}
 {card(f"Loss limit backtest, {bt_span}, ensemble plan",
       "<table><tr><th>Limit</th><th class='n'>Days it binds</th><th class='n'>Revenue</th><th class='n'>p</th>"
       f"<th class='n'>Loss days</th><th class='n'>Worst day</th></tr>{lim_rows}</table>"
-      "<p>The limit is on the average of the worst 5% of scenarios. It costs more than it saves: losses are rare, "
-      "and the days it hits are the volatile ones, which pay the most. Before fees and wear.</p>")}
+      "<p class='note'>The limit is on the average of the worst 5% of scenarios. Before fees and wear.</p>")}
 </div>""",
 }
 
@@ -549,7 +542,7 @@ def render(title, tabs, link, banner=""):
 <footer>Updated {updated}</footer>
 <div id="stale" class="stale" data-built="{built}" hidden></div>
 <script>
-// the page is rebuilt every day. if a visitor sees one older than 30 hours, say so
+// banner when the page is more than 30 hours old
 (() => {{
   const el = document.getElementById("stale"), built = new Date(el.dataset.built);
   if (Date.now() - built > 30 * 3600 * 1000) {{
@@ -559,7 +552,6 @@ def render(title, tabs, link, banner=""):
   }}
 }})();
 const resize = () => {{
-  // no forecast buttons on tabs that are the same for every forecast
   document.querySelector(".models").style.display = document.querySelector("section.active.shared") ? "none" : "";
   document.querySelectorAll("section.active .plotly-graph-div").forEach(g => {{ if (g.offsetParent) Plotly.Plots.resize(g); }});
 }};
@@ -569,7 +561,7 @@ document.querySelectorAll("nav button").forEach(b => b.onclick = () => {{
   document.getElementById(b.dataset.tab).classList.add("active");
   resize();
 }});
-// the chosen forecast, kept when going between the live and backtest pages
+// remember the chosen forecast
 const pick = m => {{
   document.body.dataset.model = m;
   document.querySelectorAll(".models button").forEach(b => b.classList.toggle("active", b.dataset.model === m));
