@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
+import json
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -641,3 +643,30 @@ Path("docs/backtest.html").write_text(
 print(f"docs/index.html: {len(ens['lv'])} live days, P&L {eur(ens['pnl'].iloc[-1]) if len(ens['lv']) else '-'} "
       f"(ensemble), next plan {latest:%d %b %Y}")
 print(f"docs/backtest.html: {ens['n']} backtest days")
+
+# summary for the desk page (jacobazu.github.io/desk), which pulls every project into one book
+d_all = runs["ensemble"]
+d_done = d_all.dropna(subset=["realized"])
+d_live, d_next = d_done[d_done["live"]], d_all.iloc[-1]
+k_bad, n_bad = int((d_done["realized"] < d_done["floor"]).sum()), len(d_done)
+rate = k_bad / n_bad
+planned = d_next["date"] == latest and pd.isna(d_next["realized"])
+if planned:
+    qn = np.where(np.abs(d_next["q"]) < 1e-6, 0, d_next["q"])
+    position = f"Buy {hours(windows(qn < 0))}, sell {hours(windows(qn > 0))}" if (qn != 0).any() else "No trade"
+desk = {
+    "name": "Battery, day-ahead", "url": "https://jacobazu.github.io/dk1-battery-trade/",
+    "updated": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),
+    "status": {"ok": bool(planned), "text": f"Plan for {latest:%a %d %b} saved" if planned else f"No plan for {latest:%a %d %b}"},
+    "tomorrow": {"date": f"{latest:%Y-%m-%d}", "position": position, "expected": round(float(d_next["expected"])),
+                 "bad": round(float(d_next["floor"]))} if planned else None,
+    "pnl": {"dates": d_live["date"].dt.strftime("%Y-%m-%d").tolist(), "daily": d_live["realized"].round(2).tolist()},
+    "checks": [{"name": "Bad days (below the 1 in 20 case)", "value": f"{rate:.1%}", "target": "5%",
+                "light": "green" if rate <= 0.065 else "amber" if rate <= 0.09 else "red",
+                "detail": f"{k_bad} of {n_bad} days, backtest and live"},
+               {"name": "Share of perfect foresight, live", "target": "backtest 94%",
+                "value": f"{d_live['realized'].sum() / d_live['perfect'].sum():.0%}",
+                "light": "green" if d_live["realized"].sum() / d_live["perfect"].sum() >= 0.85 else "amber",
+                "detail": f"{len(d_live)} live days"}],
+}
+Path("docs/desk.json").write_text(json.dumps(desk, ensure_ascii=False), encoding="utf-8")
