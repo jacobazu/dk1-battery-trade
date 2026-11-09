@@ -12,6 +12,7 @@ from battery import SETUP, battery_schedule
 from costs import FEE, WEAR, cost_of, costs
 from data import MODELS, load_all, wide
 from risk import ALPHA, error_matrix, error_scenarios, ewma_vol, has_history, nw_test, tail_stats
+from risk_view import odds, plain_line, promise_chart, surprise_groups, surprise_scatter, ticket, trade_chart
 from stress import stress_tests
 
 ORANGE, GREEN, RED, BLUE = "#f97316", "#16a34a", "#dc2626", "#0ea5e9"
@@ -77,9 +78,9 @@ def holm(p):
     return out
 
 
-def style(fig, height):
+def style(fig, height, top=10):
     fig.update_layout(
-        height=height, margin=dict(l=10, r=10, t=10, b=10), font=dict(family=FONT, color=GREY, size=12),
+        height=height, margin=dict(l=10, r=10, t=top, b=10), font=dict(family=FONT, color=GREY, size=12),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
         legend=dict(orientation="h", x=0, y=-0.15, font=dict(color=INK)),
         hoverlabel=dict(bgcolor="#ffffff", bordercolor="#efe6dc", font=dict(color=INK, family=FONT)))
@@ -212,27 +213,11 @@ def model_pages(m):
         worst_name, worst_val = min(stress.items(), key=lambda kv: kv[1])
 
         x, step = np.arange(24) + 0.5, np.arange(25)
-        pad = lambda v: np.append(v, v[-1])
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=step, y=pad(lo), mode="lines", line=dict(width=0, shape="hv"), hoverinfo="skip",
-                                 showlegend=False))
-        fig.add_trace(go.Scatter(x=step, y=pad(hi), mode="lines", line=dict(width=0, shape="hv"), fill="tonexty",
-                                 fillcolor="rgba(107,114,128,0.15)", name="90% range", hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=step, y=pad(f), mode="lines", line=dict(color=INK, width=2, shape="hv"),
-                                 name=f"Forecast ({label})", hoverinfo="skip"))
-        fig.add_trace(go.Scatter(x=x, y=f, mode="markers", marker=dict(size=20, color="rgba(0,0,0,0)"), showlegend=False,
-                                 customdata=np.c_[lo, hi, q],
-                                 hovertemplate="%{y:.0f} €/MWh (90%: %{customdata[0]:.0f}-%{customdata[1]:.0f})"
-                                               "<br>Plan: %{customdata[2]:.2f} MWh<extra></extra>"))
-        for mask, colour, word in [(q < 0, BLUE, "Buy"), (q > 0, ORANGE, "Sell")]:
-            for a_, b_ in windows(mask):
-                fig.add_vrect(x0=a_, x1=b_, fillcolor=colour, opacity=0.12, line_width=0, layer="below",
-                              annotation_text=word, annotation_position="top left",
-                              annotation_font=dict(color=colour, size=12))
         ticks = dict(range=[0, 24], tickvals=list(range(0, 25, 3)), ticktext=[f"{h:02d}:00" for h in range(0, 25, 3)])
-        fig.update_xaxes(**ticks)
-        fig.update_yaxes(title_text="€/MWh")
-        plan_chart = style(fig, 330)
+        fig, L = trade_chart(f, q, S, nxt["cost"], label, windows)
+        fig.update_layout(legend=dict(y=-0.08))
+        plan_chart = style(fig, 440, top=30)
+        p_loss = float((L["profit"] < 0).mean())
 
         fig = go.Figure()
         fig.add_trace(go.Bar(x=x[q < 0], y=q[q < 0], marker=dict(color=BLUE, cornerradius=4), width=0.6, name="Buy",
@@ -245,10 +230,7 @@ def model_pages(m):
         fig.update_yaxes(title_text="MWh", range=[-1.2, 2.2])
         fill_chart = style(fig, 220)
 
-        orders = "".join(
-            f"<tr><td>{h:02d}:00-{h + 1:02d}:00</td><td>{'Buy' if v < 0 else 'Sell'}</td><td class='n'>{abs(v):.2f}</td>"
-            f"<td class='n'>{f[h]:.0f}</td><td class='n'>{lo[h]:.0f}-{hi[h]:.0f}</td></tr>"
-            for h, v in enumerate(q) if v != 0)
+        order_ticket = ticket(f, q, L, nxt["cost"], hours, windows)
 
         names = ["Expected", "1 day in 20 below"] + list(stress)
         vals = [nxt["expected"], nxt["floor"]] + list(stress.values())
@@ -260,7 +242,16 @@ def model_pages(m):
         fig.update_xaxes(ticksuffix=" €", zeroline=True, zerolinecolor=BEIGE, showgrid=True, gridcolor=GRID)
         stress_chart = style(fig, 330)
 
+        # the plan in words, how often a bad day really came, and the last settled day
+        k_all, n_all = int((done["realized"] < done["floor"]).sum()), len(done)
+        last = done.iloc[-1] if len(done) else None
+        check = ("" if last is None else
+                 f"<div class='check'>Last settled day, {last['date']:%a %d %b}: we expected {eur(last['expected'])}, "
+                 f"a bad day {eur(last['floor'])}. It earned <b>{eur(last['realized'])}</b>"
+                 f"{' (below the bad day)' if last['realized'] < last['floor'] else ''}.</div>")
         live["Plan"] = f"""
+<div class='card plain'><div class='plain-day'>{day}</div><div class='plain-text'>{plain_line(nxt['expected'], nxt['floor'], p_loss)}</div>
+<div class='check'>Track record, last {n_all} days: a bad day came {odds(k_all, n_all)} times (we promise 1 in 20).</div>{check}</div>
 <div class='kpis'>
 {kpi(f"Buy {day}", hours(windows(q < 0)), f"{-q[q < 0].sum():.1f} MWh", BLUE)}
 {kpi("Sell", hours(windows(q > 0)), f"{q[q > 0].sum():.1f} MWh", ORANGE)}
@@ -268,8 +259,10 @@ def model_pages(m):
 {kpi("1 day in 20 below", eur(nxt['floor']), f"Worst stress test: {escape(worst_name.lower())}, {eur(worst_val)}", RED)}
 </div>
 <div class='grid2'>
-{card(f"{label} forecast for {day}, with the hours to buy and sell", plan_chart + fill_chart)}
-{card("Orders", f"<table><tr><th>Hour</th><th>Order</th><th class='n'>MWh</th><th class='n'>€/MWh</th><th class='n'>90% range</th></tr>{orders}</table>")}
+{card(f"The trade for {day} and its risk ({label})", plan_chart + "<p class='note'>Sideways: how the price could "
+      "land on the buy and sell hours, and the profit we keep, from 250 past days' forecast errors. Hatched: the worst "
+      "1 in 20.</p>" + fill_chart)}
+{card("Order ticket", order_ticket)}
 </div>"""
         live["Stress tests"] = f"""
 {card(f"What {day} earns on the {label} plan if it goes like this", stress_chart)}
@@ -350,16 +343,12 @@ price. Negative prices: -50 €/MWh 11-15. Errors x3: the worst 5%, three times 
 
     # backtest risk
     miss = bt["realized"] < bt["floor"]
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=bt["date"], y=bt["expected"], mode="lines", line=dict(color=GREY, width=1.5),
-                             name="Expected", hovertemplate="Expected %{y:.0f} €"))
-    fig.add_trace(go.Scatter(x=bt["date"], y=bt["floor"], mode="lines", line=dict(color=RED, width=1.5, dash="dot"),
-                             name="1 day in 20 below", hovertemplate="Floor %{y:.0f} €"))
-    fig.add_trace(go.Scatter(x=bt["date"], y=bt["realized"], mode="markers",
-                             marker=dict(size=6, color=np.where(miss, RED, INK), opacity=0.8), name="What it earned",
-                             hovertemplate="Earned %{y:.0f} €"))
-    fig.update_yaxes(ticksuffix=" €")
-    risk_chart = style(fig, 380)
+    risk_chart = style(promise_chart(bt), 380)
+    scatter_chart = style(surprise_scatter(bt), 380)
+    fig, grp, cuts = surprise_groups(bt)
+    groups_chart = style(fig, 380)
+    grp_rows = "".join(f"<tr><td>{g}</td><td class='n'>{v['n']}</td><td class='n'>{v['near']:.0%}</td>"
+                       f"<td class='n'>{v['below']:.1%}</td></tr>" for g, v in grp.items())
 
     n, k = len(bt), int(miss.sum())
     back = {
@@ -380,7 +369,15 @@ price. Negative prices: -50 €/MWh 11-15. Errors x3: the worst 5%, three times 
 {kpi("Average expected", eur(bt['expected'].mean()), "Per day", GREEN)}
 {kpi("Average earned", eur(bt['realized'].mean()), "Per day", ORANGE)}
 </div>
-{card("Expected revenue, the 1 in 20 floor and what the battery earned (red: below the floor)", risk_chart)}""",
+{card("Each day: expected, down to a bad day (1 in 20), and what it earned (red: below the bad day)", risk_chart)}
+<div class='grid2 even'>
+{card("How far a bad day could fall, and what happened", scatter_chart + "<p class='note'>Below the dotted line: worse "
+      "than the bad day we promised. The further right, the more risk the plan carried.</p>")}
+{card("Surprise on calm, normal and risky days", groups_chart + "<table><tr><th>Days</th><th class='n'>Days</th>"
+      f"<th class='n'>Within ±25 € of plan</th><th class='n'>Below the bad day</th></tr>{grp_rows}</table>"
+      f"<p class='note'>A third of the days each, by how far a bad day could fall: calm up to {cuts[0]:.0f} €, risky "
+      f"from {cuts[1]:.0f} €. Calm days should peak tightly at zero.</p>")}
+</div>""",
     }
     return live, back, {"lv": lv, "pnl": pnl, "n": n}
 
@@ -520,6 +517,18 @@ def render(title, tabs, link, banner=""):
   .kpi-sub {{ color: {GREY}; font-size: 13px; }}
   .grid2 {{ display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }}
   .grid2 > * {{ min-width: 0; }}
+  .grid2.even {{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }}
+  .plain {{ border-left: 4px solid {GREEN}; }}
+  .plain-day {{ color: {GREY}; font-size: 13px; }}
+  .plain-text {{ font-size: 20px; font-weight: 600; margin: 2px 0 6px; }}
+  .check {{ color: {GREY}; font-size: 14px; }}
+  .ticket .order {{ padding: 8px 0; border-bottom: 1px solid #f1ebe4; }}
+  .ticket .sub {{ color: {GREY}; font-size: 13px; }}
+  .rbar {{ position: relative; height: 24px; margin-top: 2px; }}
+  .rbar .rr {{ position: absolute; top: 8px; height: 10px; border-radius: 5px; }}
+  .rbar .rm {{ position: absolute; top: 6px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
+              border: 2px solid #fff; }}
+  .rbar .rz {{ position: absolute; top: 2px; bottom: 2px; border-left: 1px dashed {BEIGE}; }}
   @media (max-width: 900px) {{ .grid2 {{ grid-template-columns: 1fr; }} }}
   table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}
   th, td {{ text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid #f1ebe4; }}
