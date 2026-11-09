@@ -137,8 +137,9 @@ def ticket(f, q, L, cost, hours_of, windows):
         rows.append(("Sell", hours_of(windows(q > 0)), L["sell_mwh"], L["got"], ORANGE, "earns"))
     rows.append(("Profit kept", f"after {cost:.0f} € fees and wear", None, L["profit"], GREEN, "between"))
     qs = [(np.percentile(v, 5), v.mean(), np.percentile(v, 95)) for *_, v, _, _ in rows]
-    lo = min(0, min(a for a, _, _ in qs))
-    hi = max(c for _, _, c in qs)
+    lo, hi = min(a for a, _, _ in qs), max(c for _, _, c in qs)
+    pad = 0.05 * (hi - lo)
+    lo, hi = (min(0, lo - pad) if lo < pad else lo - pad), hi + pad  # zero only on the scale when it is near
     pos = lambda v: (v - lo) / (hi - lo) * 100
     out = ""
     for (name, when, mwh, v, colour, verb), (a, m, c) in zip(rows, qs):
@@ -149,9 +150,8 @@ def ticket(f, q, L, cost, hours_of, windows):
                 f"<div class='rbar'><span class='rr' style='left:{pos(a):.1f}%;width:{pos(c) - pos(a):.1f}%;"
                 f"background:{_rgba(colour, 0.35)}'></span><span class='rm' style='left:{pos(m):.1f}%;"
                 f"background:{colour}'></span>{zero}</div></div>")
-    return (f"<div class='ticket'>{out}</div><p class='note'>Each bar runs from a bad day to a good day (1 in 20 at "
-            "each end), the dot is what we expect. Buying and selling hedge each other: when the whole day is dearer, "
-            "both move together, so the profit kept varies less than the two orders.</p>")
+    return (f"<div class='ticket'>{out}</div><p class='note'>Bar: bad day to good day (1 in 20 each end). Dot: "
+            "expected. Buy and sell hedge each other, so the profit varies less.</p>")
 
 
 def promise_chart(bt):

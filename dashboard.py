@@ -260,15 +260,12 @@ def model_pages(m):
 {kpi("1 day in 20 below", eur(nxt['floor']), f"Worst stress test: {escape(worst_name.lower())}, {eur(worst_val)}", RED)}
 </div>
 <div class='grid2'>
-{card(f"The trade for {day} and its risk ({label})", plan_chart + "<p class='note'>Sideways: how the price could "
-      "land on the buy and sell hours, and the profit we keep, from 250 past days' forecast errors. Hatched: the worst "
-      "1 in 20.</p>" + fill_chart)}
+{card(f"The trade for {day} and its risk ({label})", plan_chart + "<p class='note'>Hatched: the worst 1 in 20.</p>" + fill_chart)}
 {card("Order ticket", order_ticket)}
 </div>"""
         live["Stress tests"] = f"""
 {card(f"What {day} earns on the {label} plan if it goes like this", stress_chart)}
-<p class='note'>Worst past day: the worst error of the last 250 days. Peak doesn't come: selling hours at the median
-price. Negative prices: -50 €/MWh 11-15. Errors x3: the worst 5%, three times as big.</p>"""
+"""
     else:
         live["Plan"] = live["Stress tests"] = card(f"No {label} forecast for {day}",
                                                    "<p class='note'>The model didn't run for this day. Pick another "
@@ -370,14 +367,14 @@ price. Negative prices: -50 €/MWh 11-15. Errors x3: the worst 5%, three times 
 {kpi("Average expected", eur(bt['expected'].mean()), "Per day", GREEN)}
 {kpi("Average earned", eur(bt['realized'].mean()), "Per day", ORANGE)}
 </div>
-{card("Each day: expected, down to a bad day (1 in 20), and what it earned (red: below the bad day)", risk_chart)}
+{card("Each day: expected down to a bad day, and what it earned (red: below)", risk_chart)}
 <div class='grid2 even'>
-{card("How far a bad day could fall, and what happened", scatter_chart + "<p class='note'>Below the dotted line: worse "
-      "than the bad day we promised. The further right, the more risk the plan carried.</p>")}
+{card("Risk taken vs what happened", scatter_chart + "<p class='note'>Below the dotted line: worse than the bad day."
+      "</p>")}
 {card("Surprise on calm, normal and risky days", groups_chart + "<table><tr><th>Days</th><th class='n'>Days</th>"
       f"<th class='n'>Within ±25 € of plan</th><th class='n'>Below the bad day</th></tr>{grp_rows}</table>"
-      f"<p class='note'>A third of the days each, by how far a bad day could fall: calm up to {cuts[0]:.0f} €, risky "
-      f"from {cuts[1]:.0f} €. Calm days should peak tightly at zero.</p>")}
+      f"<p class='note'>A third of the days each. Calm: a bad day at most {cuts[0]:.0f} € below expected, risky: over "
+      f"{cuts[1]:.0f} €.</p>")}
 </div>""",
     }
     return live, back, {"lv": lv, "pnl": pnl, "n": n}
@@ -476,29 +473,24 @@ backtest_tabs = {
       "for them. Wear is an assumption, sources in the README. p: Newey-West.</p>")}""",
     "Day-ahead or reserves?": f"""
 <div class='kpis'>
-{kpi("The rule", eur(rv['rule'].mean()), "a day: tomorrow goes to the market that paid most today", GREEN)}
-{kpi("Day-ahead only", eur(rv['day-ahead'].mean()), "a day, this repo's plan after fees and wear", ORANGE)}
-{kpi("FCR only", eur(rv['FCR'].mean()), "a day, the best single market", BLUE)}
-{kpi("Perfect foresight", eur(rv['best'].mean()), "a day, the best market every day, in hindsight", GREY)}
+{kpi("The rule", eur(rv['rule'].mean()), "a day, the market that paid most yesterday", GREEN)}
+{kpi("Day-ahead only", eur(rv['day-ahead'].mean()), "a day, after fees and wear", ORANGE)}
+{kpi("FCR only", eur(rv['FCR'].mean()), "a day", BLUE)}
+{kpi("Perfect foresight", eur(rv['best'].mean()), "a day, in hindsight", GREY)}
 </div>
 {card(f"Where should a DK1 battery earn? Cumulative, {rv_span}, 1 MW", rv_chart +
-      f"<p class='note'>The rule minus day-ahead only: {eur(rv_m)} a day, Newey-West t = {rv_t:.1f}. It picked FCR on "
-      f"{picks.get('FCR', 0)} days, mFRR up on {picks.get('mFRR up', 0)}, aFRR up on {picks.get('aFRR up', 0)} and "
-      f"day-ahead on {picks.get('day-ahead', 0)}.</p>")}
+      f"<p class='note'>The rule beats day-ahead only by {eur(rv_m)} a day (t = {rv_t:.1f}).</p>")}
 <div class='grid2 even'>
 {card("Per day, by month (€)", "<table><tr><th>Month</th><th class='n'>Day-ahead</th><th class='n'>FCR</th>"
       f"<th class='n'>aFRR up</th><th class='n'>mFRR up</th><th class='n'>The rule</th></tr>{rv_rows}</table>")}
 {card("How it works, and why it is too good", f'''
-<p>The same 1 MW / 2 MWh battery does one thing each day: day-ahead arbitrage, or selling its 1 MW in FCR, aFRR up or
-mFRR up. The reserve bids for tomorrow close at about 07:30 today, when today's prices in every market are known. The
-rule, fixed before it was run: <b>tomorrow goes to the market that paid most today</b>, a tie to day-ahead. Reserve
-prices from Energi Data Service.</p>
-<p><b>Weak spots.</b></p>
+<p>Each day the battery does one thing: day-ahead trading, or 1 MW in FCR, aFRR up or mFRR up. Rule, fixed in
+advance: <b>tomorrow goes to the market that paid most today</b>.</p>
+<p><b>Weak spots</b></p>
 <ul>
-<li>The battery is a price taker: accepted every hour at the clearing price. DK1's own FCR volume is about 7 MW, so a
-real 1 MW bid would move the price.</li>
-<li>aFRR prices have fallen sharply as more batteries joined (see the months), so the past overstates today.</li>
-<li>Activation energy, wear while holding reserves and the state of charge are left out.</li>
+<li>Price taker: the DK1 FCR market is only about 7 MW, so a real bid would move the price.</li>
+<li>aFRR prices have fallen a lot as batteries joined.</li>
+<li>No activation energy, wear on reserves or state of charge.</li>
 </ul>''')}
 </div>""",
     "Loss limit": f"""
