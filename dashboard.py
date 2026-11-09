@@ -12,6 +12,7 @@ from battery import SETUP, battery_schedule
 from costs import FEE, WEAR, cost_of, costs
 from data import MODELS, load_all, wide
 from risk import ALPHA, error_matrix, error_scenarios, ewma_vol, has_history, nw_test, tail_stats
+from reserves import nw_t
 from risk_view import odds, plain_line, promise_chart, surprise_groups, surprise_scatter, ticket, trade_chart
 from stress import stress_tests
 
@@ -437,6 +438,26 @@ scored at the real day-ahead prices. Pick the forecast at the top; the ensemble 
 {LAUNCH:%d %b %Y}.</p>''')}""",
 }
 
+# day-ahead or reserves? the backtest from reserves.py
+rv = pd.read_csv("results/reserves_daily.csv", parse_dates=["date"])
+RV_OPTS = ["day-ahead", "FCR", "aFRR up", "mFRR up"]
+rv_cols = {"rule": ("The rule", INK), "FCR": ("FCR only", BLUE), "mFRR up": ("mFRR up only", GREY),
+           "aFRR up": ("aFRR up only", BEIGE), "day-ahead": ("Day-ahead only", ORANGE)}
+fig = go.Figure()
+for c, (name, colour) in rv_cols.items():
+    fig.add_trace(go.Scatter(x=rv["date"], y=rv[c].cumsum(), mode="lines", name=name,
+                             line=dict(color=colour, width=3 if c == "rule" else 1.8),
+                             hovertemplate=f"{name}: %{{y:,.0f}} €<extra></extra>"))
+fig.update_yaxes(tickformat=",.0f", ticksuffix=" €")
+rv_chart = style(fig, 380)
+rv_m, rv_t = nw_t(rv["rule"] - rv["day-ahead"])
+rv_month = rv.groupby(rv["date"].dt.to_period("M"))[RV_OPTS + ["rule"]].mean()
+rv_rows = "".join(f"<tr><td>{p.strftime('%b %Y')}</td>" + "".join(
+    f"<td class='n'{' style=\'font-weight:600\'' if c == 'rule' else ''}>{r[c]:,.0f}</td>" for c in RV_OPTS + ["rule"])
+    + "</tr>" for p, r in rv_month.iterrows())
+picks = rv["pick"].value_counts()
+rv_span = f"{rv['date'].min():%d %b %Y} to {rv['date'].max():%d %b %Y}"
+
 backtest_tabs = {
     "Track record": per_model(1, "Track record"),
     "Risk": per_model(1, "Risk"),
@@ -453,6 +474,33 @@ backtest_tabs = {
       f"<th class='n'>In the plan vs after (per day)</th></tr>{cost_rows}</table>"
       "<p class='note'>After the fact: costs taken off afterwards. In the plan: it only trades when the spread pays "
       "for them. Wear is an assumption, sources in the README. p: Newey-West.</p>")}""",
+    "Day-ahead or reserves?": f"""
+<div class='kpis'>
+{kpi("The rule", eur(rv['rule'].mean()), "a day: tomorrow goes to the market that paid most today", GREEN)}
+{kpi("Day-ahead only", eur(rv['day-ahead'].mean()), "a day, this repo's plan after fees and wear", ORANGE)}
+{kpi("FCR only", eur(rv['FCR'].mean()), "a day, the best single market", BLUE)}
+{kpi("Perfect foresight", eur(rv['best'].mean()), "a day, the best market every day, in hindsight", GREY)}
+</div>
+{card(f"Where should a DK1 battery earn? Cumulative, {rv_span}, 1 MW", rv_chart +
+      f"<p class='note'>The rule minus day-ahead only: {eur(rv_m)} a day, Newey-West t = {rv_t:.1f}. It picked FCR on "
+      f"{picks.get('FCR', 0)} days, mFRR up on {picks.get('mFRR up', 0)}, aFRR up on {picks.get('aFRR up', 0)} and "
+      f"day-ahead on {picks.get('day-ahead', 0)}.</p>")}
+<div class='grid2 even'>
+{card("Per day, by month (€)", "<table><tr><th>Month</th><th class='n'>Day-ahead</th><th class='n'>FCR</th>"
+      f"<th class='n'>aFRR up</th><th class='n'>mFRR up</th><th class='n'>The rule</th></tr>{rv_rows}</table>")}
+{card("How it works, and why it is too good", f'''
+<p>The same 1 MW / 2 MWh battery does one thing each day: day-ahead arbitrage, or selling its 1 MW in FCR, aFRR up or
+mFRR up. The reserve bids for tomorrow close at about 07:30 today, when today's prices in every market are known. The
+rule, fixed before it was run: <b>tomorrow goes to the market that paid most today</b>, a tie to day-ahead. Reserve
+prices from Energi Data Service.</p>
+<p><b>Weak spots.</b></p>
+<ul>
+<li>The battery is a price taker: accepted every hour at the clearing price. DK1's own FCR volume is about 7 MW, so a
+real 1 MW bid would move the price.</li>
+<li>aFRR prices have fallen sharply as more batteries joined (see the months), so the past overstates today.</li>
+<li>Activation energy, wear while holding reserves and the state of charge are left out.</li>
+</ul>''')}
+</div>""",
     "Loss limit": f"""
 <div class='grid2'>
 {card("Revenue given up for each loss limit", limit_chart)}
