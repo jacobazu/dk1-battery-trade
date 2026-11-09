@@ -312,7 +312,7 @@ def model_pages(m):
 {kpi(f"P&L since launch, after costs ({label})", eur(pnl.iloc[-1]) if len(lv) else "-", f"{len(lv)} day{'s' * (len(lv) != 1)} since {LAUNCH:%d %b %Y}, before costs {eur(lv['gross'].sum())}" if len(lv) else "", GREEN)}
 {kpi("Last day", eur(lv['realized'].iloc[-1]) if len(lv) else "-", f"{lv['date'].iloc[-1]:%a %d %b}" if len(lv) else "", ORANGE)}
 {kpi("Share of perfect foresight", f"{lv['realized'].sum() / lv['perfect'].sum():.0%}" if len(lv) else "-", f"{len(lv)} live days. Backtest: {bt_share:.0%} over {bt_n} days", BLUE)}
-{kpi("Max drawdown", eur(drawdown), f"{len(lv)} live days. Days below the 1 in 20 floor: {lv_miss}", RED)}
+{kpi("Bad days (below the 1 in 20 case)", f"{lv_miss} of {len(lv)}", f"about {0.05 * len(lv):.0f} expected if the risk numbers are right. Max drawdown {eur(drawdown)}", RED)}
 </div>
 <p class='note'>With few live days these numbers can still change a lot. The backtest has {bt_n} days.</p>
 <div class='grid2'>
@@ -354,6 +354,7 @@ def model_pages(m):
 <div class='kpis'>
 {kpi(f"Share of perfect foresight ({label})", f"{bt['realized'].sum() / bt['perfect'].sum():.0%}", f"{n} days", ORANGE)}
 {kpi("Earned in total, after costs", eur(bt['realized'].sum()), f"{eur(bt['realized'].mean())} a day, before costs {eur(bt['gross'].sum())}", GREEN)}
+{kpi("Per MW a year", f"{bt['realized'].mean() * 365 / 1000:,.0f} k€", f"the usual way to quote battery revenue. Day to day ± {eur(bt['realized'].std())}", BLUE)}
 {kpi("Days with a loss", str(int((bt['realized'] < 0).sum())), f"Worst: {eur(bt['realized'].min())}", RED)}
 </div>
 {card("What the battery would have earned after costs, added up", track_chart)}
