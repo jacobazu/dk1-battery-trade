@@ -568,6 +568,8 @@ def render(title, tabs, link, banner=""):
   .rbar .rr {{ position: absolute; top: 8px; height: 10px; border-radius: 5px; }}
   .rbar .rm {{ position: absolute; top: 6px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
               border: 2px solid #fff; }}
+  .rbar .rbad {{ position: absolute; top: 8px; height: 10px; width: 3%; border-radius: 5px; background: {RED}; }}
+  .rbar .rl {{ position: absolute; top: 4px; font-size: 12px; color: {GREY}; white-space: nowrap; }}
   .rbar .rz {{ position: absolute; top: 2px; bottom: 2px; border-left: 1px dashed {BEIGE}; }}
   @media (max-width: 900px) {{ .grid2 {{ grid-template-columns: 1fr; }} }}
   table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}

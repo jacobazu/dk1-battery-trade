@@ -129,29 +129,30 @@ def trade_chart(f, q, S, cost, label, windows):
 
 
 def ticket(f, q, L, cost, hours_of, windows):
-    """Order ticket: each side's range in euro on one scale, and the profit you keep."""
+    """Order ticket: each order around what we expect, on one shared scale of how far it can move."""
     rows = []
     if L["buy_mwh"] > 0:
-        rows.append(("Buy", hours_of(windows(q < 0)), L["buy_mwh"], L["paid"], BLUE, "costs"))
+        rows.append(("Buy", hours_of(windows(q < 0)), L["buy_mwh"], L["paid"], BLUE, "costs", "high"))
     if L["sell_mwh"] > 0:
-        rows.append(("Sell", hours_of(windows(q > 0)), L["sell_mwh"], L["got"], ORANGE, "earns"))
-    rows.append(("Profit kept", f"after {cost:.0f} € fees and wear", None, L["profit"], GREEN, "between"))
-    qs = [(np.percentile(v, 5), v.mean(), np.percentile(v, 95)) for *_, v, _, _ in rows]
-    lo, hi = min(a for a, _, _ in qs), max(c for _, _, c in qs)
-    pad = 0.05 * (hi - lo)
-    lo, hi = (min(0, lo - pad) if lo < pad else lo - pad), hi + pad  # zero only on the scale when it is near
-    pos = lambda v: (v - lo) / (hi - lo) * 100
+        rows.append(("Sell", hours_of(windows(q > 0)), L["sell_mwh"], L["got"], ORANGE, "earns", "low"))
+    rows.append(("Profit kept", f"after {cost:.0f} € fees and wear", None, L["profit"], GREEN, "keeps", "low"))
+    qs = [(np.percentile(v, 5), v.mean(), np.percentile(v, 95)) for *_, v, _, _, _ in rows]
+    reach = max(max(m - a, c - m) for a, m, c in qs) * 1.35  # room for the numbers at the ends
+    pos = lambda d: 50 + d / reach * 50  # distance from expected, in % of the bar
     out = ""
-    for (name, when, mwh, v, colour, verb), (a, m, c) in zip(rows, qs):
-        zero = f"<span class='rz' style='left:{pos(0):.1f}%'></span>" if lo < 0 else ""
+    for (name, when, mwh, v, colour, verb, bad), (a, m, c) in zip(rows, qs):
+        bad_end = (f"<span class='rbad' style='left:{pos(c - m) - 3:.1f}%'></span>" if bad == "high" else
+                   f"<span class='rbad' style='left:{pos(a - m):.1f}%'></span>")
         out += (f"<div class='order'><div><b style='color:{colour}'>{name}</b> <span class='sub'>{when}"
                 f"{f', {mwh:.1f} MWh' if mwh else ''}</span></div>"
-                f"<div class='sub'>{verb} {a:,.0f} to {c:,.0f} €, about {m:,.0f} €</div>"
-                f"<div class='rbar'><span class='rr' style='left:{pos(a):.1f}%;width:{pos(c) - pos(a):.1f}%;"
-                f"background:{_rgba(colour, 0.35)}'></span><span class='rm' style='left:{pos(m):.1f}%;"
-                f"background:{colour}'></span>{zero}</div></div>")
-    return (f"<div class='ticket'>{out}</div><p class='note'>Bar: bad day to good day (1 in 20 each end). Dot: "
-            "expected. Buy and sell hedge each other, so the profit varies less.</p>")
+                f"<div class='sub'>{verb} about <b>{m:,.0f} €</b></div>"
+                f"<div class='rbar'><span class='rr' style='left:{pos(a - m):.1f}%;width:{pos(c - m) - pos(a - m):.1f}%;"
+                f"background:{_rgba(colour, 0.35)}'></span>{bad_end}<span class='rm' style='left:50%;"
+                f"background:{colour}'></span>"
+                f"<span class='rl' style='right:{100 - pos(a - m) + 1:.1f}%'>{a:,.0f}</span>"
+                f"<span class='rl' style='left:{pos(c - m) + 1:.1f}%'>{c:,.0f}</span></div></div>")
+    return (f"<div class='ticket'>{out}</div><p class='note'>Dot: what we expect. Bar: 9 days in 10, red end the bad "
+            "side. Buy and sell move together, so the profit moves less than the two orders.</p>")
 
 
 def promise_chart(bt):
