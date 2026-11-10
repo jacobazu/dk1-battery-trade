@@ -6,7 +6,7 @@ from scipy.stats import gaussian_kde
 
 from risk import ALPHA
 
-INK, GREY, RED, BLUE, ORANGE, GREEN, BEIGE = "#1f2328", "#6b7280", "#dc2626", "#0ea5e9", "#f97316", "#16a34a", "#cfc6bb"
+INK, GREY, RED, TEAL, ACCENT, GREEN, BEIGE = "#1f2328", "#6b7280", "#dc2626", "#2a9d8f", "#1b66ad", "#16a34a", "#c3c8cf"
 HATCH = dict(shape="/", fgcolor=RED, bgcolor="rgba(220,38,38,0.08)", size=6, solidity=0.3)
 
 
@@ -43,7 +43,7 @@ def promise_strip(d, w=11, g=4, h=46):
     for i, r in enumerate(d.itertuples()):
         x = i * (w + g); miss = r.realized < r.floor
         out += (f"<g><title>{r.date:%a %d %b}: earned {r.realized:,.0f} €, expected {r.expected:,.0f}, bad day {r.floor:,.0f}</title>"
-                f"<rect x='{x}' y='{y(r.expected):.1f}' width='{w}' height='{max(y(r.floor) - y(r.expected), 2):.1f}' rx='2' fill='#e7ded3'/>"
+                f"<rect x='{x}' y='{y(r.expected):.1f}' width='{w}' height='{max(y(r.floor) - y(r.expected), 2):.1f}' rx='2' fill='#dde1e6'/>"
                 f"<circle cx='{x + w / 2}' cy='{y(r.realized):.1f}' r='3.6' fill='{RED if miss else INK}'/></g>")
     W = len(d) * (w + g) - g
     return f"<svg class='pstrip' viewBox='0 0 {W} {h}' width='{W}' height='{h}'>{out}</svg>"
@@ -105,8 +105,8 @@ def trade_chart(f, q, S, cost, label, windows):
                              hovertemplate="%{x|.0f}: %{y:.0f} €/MWh, 9 in 10 days %{customdata[0]:.0f}-"
                                            "%{customdata[1]:.0f}<extra></extra>"), row=1, col=1)
 
-    for mask, colour, word, tail, title in [(q < 0, BLUE, "Buy", "high", "What we might pay"),
-                                            (q > 0, ORANGE, "Sell", "low", "What we might get")]:
+    for mask, colour, word, tail, title in [(q < 0, TEAL, "Buy", "high", "What we might pay"),
+                                            (q > 0, ACCENT, "Sell", "low", "What we might get")]:
         if not mask.any():
             continue
         for a, b in windows(mask):
@@ -148,9 +148,9 @@ def ticket(f, q, L, cost, hours_of, windows):
     """Order ticket: each order around what we expect, on one shared scale of how far it can move."""
     rows = []
     if L["buy_mwh"] > 0:
-        rows.append(("Buy", hours_of(windows(q < 0)), L["buy_mwh"], L["paid"], BLUE, "costs", "high"))
+        rows.append(("Buy", hours_of(windows(q < 0)), L["buy_mwh"], L["paid"], TEAL, "costs", "high"))
     if L["sell_mwh"] > 0:
-        rows.append(("Sell", hours_of(windows(q > 0)), L["sell_mwh"], L["got"], ORANGE, "earns", "low"))
+        rows.append(("Sell", hours_of(windows(q > 0)), L["sell_mwh"], L["got"], ACCENT, "earns", "low"))
     rows.append(("Profit kept", f"after {cost:.0f} € fees and wear", None, L["profit"], GREEN, "keeps", "low"))
     qs = [(np.percentile(v, 5), v.mean(), np.percentile(v, 95)) for *_, v, _, _, _ in rows]
     reach = max(max(m - a, c - m) for a, m, c in qs) * 1.35  # room for the numbers at the ends
