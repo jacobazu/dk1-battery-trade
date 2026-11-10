@@ -15,7 +15,7 @@ from costs import FEE, WEAR, cost_of, costs
 from data import MODELS, load_all, wide
 from risk import ALPHA, error_matrix, error_scenarios, ewma_vol, has_history, nw_test, tail_stats
 from reserves import nw_t
-from risk_view import odds, plain_line, promise_chart, surprise_groups, surprise_scatter, ticket, trade_chart
+from risk_view import odds, plain_line, promise_chart, promise_strip, surprise_groups, surprise_scatter, ticket, trade_chart
 from stress import stress_tests
 
 ORANGE, GREEN, RED, BLUE = "#f97316", "#16a34a", "#dc2626", "#0ea5e9"
@@ -129,11 +129,8 @@ tomorrow = now_dk.normalize().tz_localize(None) + pd.Timedelta(days=1)
 missing = ""
 if latest < tomorrow:
     late = now_dk.hour >= 12
-    why = ("The price forecast wasn't made before the noon auction, so there is no plan for that day." if late
-           else "It is made once the price forecast is saved, at about 10:30.")
-    missing = (f"<div class='card' style='border-left:4px solid {RED}'><div class='card-title'>No plan for "
-               f"{tomorrow:%a %d %b}{'' if late else ' yet'}</div><p class='note'>{why} Below is the last plan, "
-               f"for {day}.</p></div>")
+    missing = (f"<div class='pill red'>No plan for {tomorrow:%a %d %b}{'' if late else ' yet · comes about 10:30'}"
+               f" · showing {day}</div>")
 
 # what each plan earned, side by side
 cmp_days = runs["ensemble"].dropna(subset=["realized"])[["date", "live", "perfect"]]
@@ -252,17 +249,18 @@ def model_pages(m):
                  f"<div class='check'>Last settled day, {last['date']:%a %d %b}: we expected {eur(last['expected'])}, "
                  f"a bad day {eur(last['floor'])}. It earned <b>{eur(last['realized'])}</b>"
                  f"{' (below the bad day)' if last['realized'] < last['floor'] else ''}.</div>")
+        recent = done.tail(30)
+        k30 = int((recent["realized"] < recent["floor"]).sum())
+        pl = "<1%" if round(p_loss * 100) == 0 else f"{p_loss:.0%}"
         live["Plan"] = f"""
-<div class='card plain'><div class='plain-day'>{day}</div><div class='plain-text'>{plain_line(nxt['expected'], nxt['floor'], p_loss)}</div>
-<div class='check'>Track record, last {n_all} days: a bad day came {odds(k_all, n_all)} times (we promise 1 in 20).</div>{check}</div>
-<div class='kpis'>
-{kpi(f"Buy {day}", hours(windows(q < 0)), f"{-q[q < 0].sum():.1f} MWh", BLUE)}
-{kpi("Sell", hours(windows(q > 0)), f"{q[q > 0].sum():.1f} MWh", ORANGE)}
-{kpi("Expected, after costs", eur(nxt['expected']), f"Fees and wear: {eur(nxt['cost'])}", GREEN)}
-{kpi("1 day in 20 below", eur(nxt['floor']), f"Worst stress test: {escape(worst_name.lower())}, {eur(worst_val)}", RED)}
+<div class='card plain'>
+<div class='big'><div><span>{day}, expected</span><b>{eur(nxt['expected'])}</b></div>
+<div><span>bad day (1 in 20)</span><b style='color:{RED}'>{eur(nxt['floor'])}</b></div>
+<div><span>chance of a loss</span><b>{pl}</b></div>
+<div class='strip'><span>last {len(recent)} days · {k30} below the bad day</span>{promise_strip(recent)}</div></div>
 </div>
 <div class='grid2'>
-{card(f"The trade for {day} and its risk ({label})", plan_chart + "<p class='note'>Hatched: the worst 1 in 20.</p>" + fill_chart)}
+{card(f"The trade and its risk ({label})", plan_chart + fill_chart)}
 {card("Order ticket", order_ticket)}
 </div>"""
         live["Stress tests"] = f"""
@@ -307,22 +305,20 @@ def model_pages(m):
         f"<td class='n'>{eur(r.cost)}</td><td class='n'><b>{eur(r.realized)}</b></td><td class='n'>{eur(r.perfect)}</td>"
         f"<td>{'below the floor' if r.realized < r.floor else ''}</td></tr>"
         for r in lv.iloc[::-1].itertuples())
+    promise_live = style(promise_chart(lv), 300) if len(lv) else "<p class='note'>Starts after the first day.</p>"
     cmp_html = compare_table(live_cmp, False, m) if live_cmp is not None else "<p class='note'>Starts after the first day.</p>"
 
     live["P&L"] = f"""
 <div class='kpis'>
-{kpi(f"P&L since launch, after costs ({label})", eur(pnl.iloc[-1]) if len(lv) else "-", f"{len(lv)} day{'s' * (len(lv) != 1)} since {LAUNCH:%d %b %Y}, before costs {eur(lv['gross'].sum())}" if len(lv) else "", GREEN)}
+{kpi(f"P&L since launch, after costs ({label})", eur(pnl.iloc[-1]) if len(lv) else "-", f"{len(lv)} days" if len(lv) else "", GREEN)}
 {kpi("Last day", eur(lv['realized'].iloc[-1]) if len(lv) else "-", f"{lv['date'].iloc[-1]:%a %d %b}" if len(lv) else "", ORANGE)}
-{kpi("Share of perfect foresight", f"{lv['realized'].sum() / lv['perfect'].sum():.0%}" if len(lv) else "-", f"{len(lv)} live days. Backtest: {bt_share:.0%} over {bt_n} days", BLUE)}
-{kpi("Bad days (below the 1 in 20 case)", f"{lv_miss} of {len(lv)}", f"about {0.05 * len(lv):.0f} expected if the risk numbers are right. Max drawdown {eur(drawdown)}", RED)}
+{kpi("Share of perfect foresight", f"{lv['realized'].sum() / lv['perfect'].sum():.0%}" if len(lv) else "-", f"backtest {bt_share:.0%}", BLUE)}
+{kpi("Bad days (below the 1 in 20 case)", f"{lv_miss} of {len(lv)}", f"aim about {0.05 * len(lv):.0f} · drawdown {eur(drawdown)}", RED)}
 </div>
-<p class='note'>With few live days these numbers can still change a lot. The backtest has {bt_n} days.</p>
 <div class='grid2'>
 <div>{card("P&L since launch, added up", pnl_chart)}{card(f"P&L per day ({label})", daily_chart)}</div>
 <div>{card("Each forecast, the same battery", cmp_html)}
-{card(f"Every day since launch ({label})", "<table><tr><th>Day</th><th class='n'>Expected</th><th class='n'>1 in 20 floor</th>"
-      f"<th class='n'>Costs</th><th class='n'>Earned</th><th class='n'>Perfect</th><th></th></tr>{live_rows}</table>"
-      f"<p class='note'>After the Nord Pool fee ({FEE} €/MWh) and wear ({WEAR:.0f} €/MWh sold).</p>")}</div>
+{card(f"Each day: expected down to a bad day, and what it earned ({label})", promise_live)}</div>
 </div>"""
 
     # backtest track record
@@ -564,6 +560,16 @@ def render(title, tabs, link, banner=""):
   .plain {{ border-left: 4px solid {GREEN}; }}
   .plain-day {{ color: {GREY}; font-size: 13px; }}
   .plain-text {{ font-size: 20px; font-weight: 600; margin: 2px 0 6px; }}
+  .big {{ display: flex; gap: 36px; align-items: flex-end; flex-wrap: wrap; }}
+  .big span {{ display: block; color: {GREY}; font-size: 13px; }}
+  .big b {{ font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; }}
+  .big .strip {{ margin-left: auto; }}
+  .pill {{ display: inline-block; padding: 4px 12px; border-radius: 99px; font-size: 13px; margin: 0 0 12px; }}
+  .pill.red {{ background: #fee2e2; color: #991b1b; }}
+  .key {{ color: {GREY}; font-size: 12px; margin-top: 10px; display: flex; align-items: center; gap: 6px; }}
+  .key .kd {{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; }}
+  .key .kb {{ width: 22px; height: 6px; border-radius: 3px; background: #ddd5ca; display: inline-block; margin-left: 8px; }}
+  .key .kd + .kb, .key .kb + .kd {{ margin-left: 8px; }}
   .check {{ color: {GREY}; font-size: 14px; }}
   .ticket .order {{ padding: 8px 0; border-bottom: 1px solid #f1ebe4; }}
   .ticket .sub {{ color: {GREY}; font-size: 13px; }}
@@ -654,19 +660,21 @@ planned = d_next["date"] == latest and pd.isna(d_next["realized"])
 if planned:
     qn = np.where(np.abs(d_next["q"]) < 1e-6, 0, d_next["q"])
     position = f"Buy {hours(windows(qn < 0))}, sell {hours(windows(qn > 0))}" if (qn != 0).any() else "No trade"
+share_live = d_live["realized"].sum() / d_live["perfect"].sum()
 desk = {
     "name": "Battery, day-ahead", "url": "https://jacobazu.github.io/dk1-battery-trade/",
     "updated": pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%dT%H:%MZ"),
     "status": {"ok": bool(planned), "text": f"Plan for {latest:%a %d %b} saved" if planned else f"No plan for {latest:%a %d %b}"},
     "tomorrow": {"date": f"{latest:%Y-%m-%d}", "position": position, "expected": round(float(d_next["expected"])),
                  "bad": round(float(d_next["floor"]))} if planned else None,
-    "pnl": {"dates": d_live["date"].dt.strftime("%Y-%m-%d").tolist(), "daily": d_live["realized"].round(2).tolist()},
-    "checks": [{"name": "Bad days (below the 1 in 20 case)", "value": f"{rate:.1%}", "target": "5%",
-                "light": "green" if rate <= 0.065 else "amber" if rate <= 0.09 else "red",
-                "detail": f"{k_bad} of {n_bad} days, backtest and live"},
-               {"name": "Share of perfect foresight, live", "target": "backtest 94%",
-                "value": f"{d_live['realized'].sum() / d_live['perfect'].sum():.0%}",
-                "light": "green" if d_live["realized"].sum() / d_live["perfect"].sum() >= 0.85 else "amber",
-                "detail": f"{len(d_live)} live days"}],
+    "pnl": {"dates": d_live["date"].dt.strftime("%Y-%m-%d").tolist(), "daily": d_live["realized"].round(2).tolist(),
+            "expected": d_live["expected"].round(2).tolist(), "floor": d_live["floor"].round(2).tolist()},
+    # tomorrow hour by hour: MWh (+ sell, - buy) and the forecast price
+    "plan": {"q": np.round(qn, 2).tolist(), "price": np.round(d_next["f"], 1).tolist()} if planned else None,
+    # x on a scale from lo to hi, aim marks the promise; the desk page draws each as a bar
+    "checks": [{"name": "Bad days, aim 5%", "value": f"{rate:.1%}", "x": round(100 * rate, 2), "aim": 5, "lo": 0, "hi": 15,
+                "light": "green" if rate <= 0.065 else "amber" if rate <= 0.09 else "red"},
+               {"name": "Of perfect foresight", "value": f"{share_live:.0%}", "x": round(100 * share_live, 1), "aim": 94, "lo": 50, "hi": 100,
+                "light": "green" if share_live >= 0.85 else "amber"}],
 }
 Path("docs/desk.json").write_text(json.dumps(desk, ensure_ascii=False), encoding="utf-8")

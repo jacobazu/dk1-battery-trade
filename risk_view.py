@@ -33,6 +33,22 @@ def plain_line(expected, floor, p_loss):
     return f"We expect to make about {round5(expected)} €. {bad} Chance of losing money: {chance}."
 
 
+def promise_strip(d, w=11, g=4, h=46):
+    """Last days as tiny bars: grey from the bad case up to expected, a dot for what it earned (red below the bad case)."""
+    if len(d) == 0:
+        return ""
+    lo = min(d["floor"].min(), d["realized"].min()); hi = max(d["expected"].max(), d["realized"].max())
+    y = lambda v: h - 3 - (v - lo) / (hi - lo + 1e-9) * (h - 6)
+    out = ""
+    for i, r in enumerate(d.itertuples()):
+        x = i * (w + g); miss = r.realized < r.floor
+        out += (f"<g><title>{r.date:%a %d %b}: earned {r.realized:,.0f} €, expected {r.expected:,.0f}, bad day {r.floor:,.0f}</title>"
+                f"<rect x='{x}' y='{y(r.expected):.1f}' width='{w}' height='{max(y(r.floor) - y(r.expected), 2):.1f}' rx='2' fill='#e7ded3'/>"
+                f"<circle cx='{x + w / 2}' cy='{y(r.realized):.1f}' r='3.6' fill='{RED if miss else INK}'/></g>")
+    W = len(d) * (w + g) - g
+    return f"<svg class='pstrip' viewBox='0 0 {W} {h}' width='{W}' height='{h}'>{out}</svg>"
+
+
 def odds(k, n):
     """'1 in 14' from k of n days."""
     return "never" if k == 0 else f"1 in {round(n / k)}"
@@ -151,8 +167,9 @@ def ticket(f, q, L, cost, hours_of, windows):
                 f"background:{colour}'></span>"
                 f"<span class='rl' style='right:{100 - pos(a - m) + 1:.1f}%'>{a:,.0f}</span>"
                 f"<span class='rl' style='left:{pos(c - m) + 1:.1f}%'>{c:,.0f}</span></div></div>")
-    return (f"<div class='ticket'>{out}</div><p class='note'>Dot: what we expect. Bar: 9 days in 10, red end the bad "
-            "side. Buy and sell move together, so the profit moves less than the two orders.</p>")
+    key = (f"<div class='key'><span class='kd' style='background:{INK}'></span>expected <span class='kb'></span>9 in 10 "
+           f"<span class='kd' style='background:{RED}'></span>bad side</div>")
+    return f"<div class='ticket'>{out}</div>{key}"
 
 
 def promise_chart(bt):
