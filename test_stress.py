@@ -21,4 +21,4 @@ def test_a_peak_that_does_not_come_costs_money():
 
 
 def test_negative_midday_leaves_a_plan_idle_at_midday_alone():
-    assert np.isclose(stress_tests(F, Q, NO_ERRORS)["Negative prices 11–15"], F @ Q)
+    assert np.isclose(stress_tests(F, Q, NO_ERRORS)["Negative prices 11-15"], F @ Q)

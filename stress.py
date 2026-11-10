@@ -17,6 +17,6 @@ def stress_tests(f, q, S):
     return {
         "Worst of the last 250 days": planned + (S @ q).min(),
         "The peak doesn't come": no_peak @ q,
-        "Negative prices 11–15": negative @ q,
+        "Negative prices 11-15": negative @ q,
         "Errors 3 times as big (worst 5%)": tail_stats(planned + 3 * (S @ q))["tail"],
     }
