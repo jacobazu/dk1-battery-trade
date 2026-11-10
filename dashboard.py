@@ -18,9 +18,10 @@ from reserves import nw_t
 from risk_view import odds, plain_line, promise_chart, promise_strip, surprise_groups, surprise_scatter, ticket, trade_chart
 from stress import stress_tests
 
-ACCENT, GREEN, RED, TEAL = "#1b66ad", "#16a34a", "#dc2626", "#2a9d8f"
-INK, GREY, LINE, GRID, BEIGE = "#1f2328", "#6b7280", "#dde1e6", "#eceef1", "#c3c8cf"
-FONT = "IBM Plex Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
+ACCENT, GREEN, RED, TEAL = "#2fa3b8", "#4fd08a", "#ff7a7a", "#d45c88"
+INK, GREY, LINE, GRID, BEIGE = "#e9f0f7", "#8fa6bd", "rgba(255,255,255,0.15)", "rgba(255,255,255,0.07)", "rgba(255,255,255,0.28)"
+AQUA, AMBER = "#62d6e8", "#ffb86b"
+FONT = "Instrument Sans, Segoe UI, Helvetica Neue, Arial, sans-serif"
 # github icon
 GITHUB_ICON = ('<svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 '
                '3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94'
@@ -32,7 +33,7 @@ GITHUB_ICON = ('<svg width="18" height="18" viewBox="0 0 16 16" fill="currentCol
 PLOTLY_JS = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@4.1.1/plotly.min.js"
 LAUNCH = pd.Timestamp("2026-10-13")  # first day traded on a live forecast
 LABELS = {"ensemble": "Ensemble", "bmtx": "BMT-X", "learx": "LEAR-X", "xgbx": "XGBoost-X"}
-COLORS = {"ensemble": ACCENT, "bmtx": "#7a5195", "learx": TEAL, "xgbx": GREEN}  # as on the price dashboard
+COLORS = {"ensemble": ACCENT, "bmtx": "#8f74e8", "learx": TEAL, "xgbx": "#c97d2c"}  # as on the price dashboard
 COSTS = costs()  # nord pool fee + wear
 
 
@@ -86,7 +87,7 @@ def style(fig, height, top=10):
         height=height, margin=dict(l=10, r=10, t=top, b=10), font=dict(family=FONT, color=GREY, size=12),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", hovermode="x unified",
         legend=dict(orientation="h", x=0, y=-0.15, font=dict(color=INK)),
-        hoverlabel=dict(bgcolor="#ffffff", bordercolor="#e1e4e8", font=dict(color=INK, family=FONT)))
+        hoverlabel=dict(bgcolor="#15324f", bordercolor="#2b4a6b", font=dict(color=INK, family=FONT)))
     fig.update_xaxes(showgrid=False, zeroline=False, linecolor=LINE, color=GREY)
     fig.update_yaxes(gridcolor=GRID, zerolinecolor=BEIGE, color=GREY)
     return fig.to_html(full_html=False, include_plotlyjs=False, config=dict(displayModeBar=False, responsive=True))
@@ -521,77 +522,80 @@ def render(title, tabs, link, banner=""):
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="{PLOTLY_JS}"></script>
 <style>
-  body {{ margin: 0; background: #f4f5f7; color: {INK}; font: 15px/1.5 {FONT}; }}
-  header {{ background: #fff; border-bottom: 1px solid #e1e4e8; padding: 0 20px; display: flex; flex-wrap: wrap;
-           align-items: center; gap: 4px 24px; }}
-  header h1 {{ font-size: 17px; font-weight: 600; margin: 14px 0; }}
-  nav {{ display: flex; flex-wrap: wrap; }}
-  nav button {{ font: 500 14px {FONT}; color: {GREY}; background: none; border: 0; padding: 14px 10px; cursor: pointer; }}
-  nav button.active {{ color: {INK}; box-shadow: inset 0 -2px 0 {ACCENT}; }}
-  header .links {{ margin-left: auto; font-size: 13px; display: flex; align-items: center; gap: 16px; }}
-  header .links a {{ color: {GREY}; }}
-  header .links svg {{ display: block; }}
-  .banner {{ background: #eef4fa; border-bottom: 1px solid #bcd3ea; color: #0d3a66; font-size: 14px;
-            padding: 8px 20px; }}
+  html {{ background: #0a1626; }}
+  body {{ margin: 0; min-height: 100vh; color: {INK}; font: 15px/1.5 {FONT};
+         background: radial-gradient(1200px 700px at 70% 0%, #15324f 0%, #0c1c30 55%, #0a1626 100%) fixed; }}
+  header {{ padding: 10px 20px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 20px; }}
+  header h1 {{ font-size: 17px; font-weight: 600; margin: 10px 8px 10px 0; }}
+  nav {{ display: flex; flex-wrap: wrap; gap: 2px; }}
+  nav button {{ font: 500 14.5px {FONT}; color: {GREY}; background: none; border: 0; padding: 7px 15px; border-radius: 99px; cursor: pointer; }}
+  nav button:hover {{ color: {INK}; }}
+  nav button.active {{ color: #0c1c30; background: {INK}; }}
+  header .links {{ margin-left: auto; font-size: 14px; display: flex; align-items: center; gap: 16px; }}
+  header .links a {{ color: {GREY}; text-decoration: none; }}
+  header .links svg {{ display: block; fill: {INK}; }}
+  .banner {{ background: rgba(98,214,232,0.08); border: 1px solid rgba(98,214,232,0.25); color: #c9d6e2; font-size: 14px;
+            padding: 8px 16px; border-radius: 10px; max-width: 1248px; margin: 12px auto 0; }}
   main {{ max-width: 1280px; margin: 0 auto; padding: 18px 16px 40px; }}
   .models {{ display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }}
   .models span {{ color: {GREY}; font-size: 13px; margin-right: 4px; }}
-  .models button {{ font: 600 13px {FONT}; color: {INK}; background: #eef4fa; border: 1px solid #bcd3ea;
-                   border-radius: 999px; padding: 6px 16px; cursor: pointer; }}
-  .models button.active {{ color: #fff; background: {ACCENT}; border-color: {ACCENT}; }}
+  .models button {{ font: 500 13px {FONT}; color: {GREY}; background: transparent; border: 1px solid rgba(255,255,255,0.14);
+                   border-radius: 999px; padding: 5px 15px; cursor: pointer; }}
+  .models button:hover {{ color: {INK}; border-color: rgba(255,255,255,0.3); }}
+  .models button.active {{ color: #0c1c30; background: {INK}; border-color: {INK}; }}
   .m {{ display: none; }}
   {show}
   section {{ display: none; }}
   section.active {{ display: block; }}
-  .card {{ background: #fff; border: 1px solid #e1e4e8; border-radius: 8px;
-          padding: 14px 16px; margin-bottom: 16px; min-width: 0; }}
-  .card-title {{ font-weight: 600; margin-bottom: 8px; }}
-  .kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }}
-  .kpi {{ border-left: 4px solid var(--accent); }}
+  .card {{ background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px;
+          padding: 16px 20px; margin-bottom: 18px; min-width: 0; }}
+  .card-title {{ font-weight: 500; margin-bottom: 8px; }}
+  .kpis {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }}
+  .kpi {{ }}
   .kpi-label {{ color: {GREY}; font-size: 13px; }}
-  .kpi-value {{ font-size: 24px; font-weight: 600; margin: 2px 0; }}
+  .kpi-value {{ font-size: 30px; font-weight: 500; letter-spacing: -0.02em; margin: 2px 0; font-variant-numeric: tabular-nums; }}
   .kpi-sub {{ color: {GREY}; font-size: 13px; }}
-  .grid2 {{ display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }}
+  .grid2 {{ display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 18px; }}
   .grid2 > * {{ min-width: 0; }}
   .grid2.even {{ grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }}
-  .plain {{ border-left: 4px solid {GREEN}; }}
+  .plain {{ }}
   .plain-day {{ color: {GREY}; font-size: 13px; }}
-  .plain-text {{ font-size: 20px; font-weight: 600; margin: 2px 0 6px; }}
-  .big {{ display: flex; gap: 36px; align-items: flex-end; flex-wrap: wrap; }}
-  .big span {{ display: block; color: {GREY}; font-size: 13px; }}
-  .big b {{ font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; }}
+  .plain-text {{ font-size: 20px; font-weight: 500; margin: 2px 0 6px; }}
+  .big {{ display: flex; gap: 40px; align-items: flex-end; flex-wrap: wrap; }}
+  .big span {{ display: block; color: {GREY}; font-size: 13.5px; }}
+  .big b {{ font-size: 40px; font-weight: 500; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }}
   .big .strip {{ margin-left: auto; }}
   .pill {{ display: inline-block; padding: 4px 12px; border-radius: 99px; font-size: 13px; margin: 0 0 12px; }}
-  .pill.red {{ background: #fee2e2; color: #991b1b; }}
+  .pill.red {{ background: rgba(255,122,122,0.16); color: #ff9c9c; }}
   .key {{ color: {GREY}; font-size: 12px; margin-top: 10px; display: flex; align-items: center; gap: 6px; }}
   .key .kd {{ width: 9px; height: 9px; border-radius: 50%; display: inline-block; }}
-  .key .kb {{ width: 22px; height: 6px; border-radius: 3px; background: #d5d9de; display: inline-block; margin-left: 8px; }}
+  .key .kb {{ width: 22px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.18); display: inline-block; margin-left: 8px; }}
   .key .kd + .kb, .key .kb + .kd {{ margin-left: 8px; }}
   .check {{ color: {GREY}; font-size: 14px; }}
-  .ticket .order {{ padding: 8px 0; border-bottom: 1px solid #eceef1; }}
+  .ticket .order {{ padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }}
   .ticket .sub {{ color: {GREY}; font-size: 13px; }}
   .rbar {{ position: relative; height: 24px; margin-top: 2px; }}
   .rbar .rr {{ position: absolute; top: 8px; height: 10px; border-radius: 5px; }}
   .rbar .rm {{ position: absolute; top: 6px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%;
-              border: 2px solid #fff; }}
+              border: 2px solid #0c1c30; }}
   .rbar .rbad {{ position: absolute; top: 8px; height: 10px; width: 3%; border-radius: 5px; background: {RED}; }}
   .rbar .rl {{ position: absolute; top: 4px; font-size: 12px; color: {GREY}; white-space: nowrap; }}
   .rbar .rz {{ position: absolute; top: 2px; bottom: 2px; border-left: 1px dashed {BEIGE}; }}
-  @media (max-width: 900px) {{ .grid2 {{ grid-template-columns: 1fr; }} }}
+  @media (max-width: 900px) {{ .grid2, .grid2.even {{ grid-template-columns: 1fr; }} header .links {{ margin-left: 0; }} }}
   table {{ border-collapse: collapse; width: 100%; font-size: 14px; }}
-  th, td {{ text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid #eceef1; }}
+  th, td {{ text-align: left; padding: 7px 8px 7px 0; border-bottom: 1px solid rgba(255,255,255,0.08); }}
   th {{ color: {GREY}; font-weight: 500; font-size: 13px; }}
   tr.sel td {{ font-weight: 600; }}
   .n {{ text-align: right; font-variant-numeric: tabular-nums; }}
-  p {{ color: #3b3f45; }}
+  p {{ color: #c9d6e2; }}
   .note {{ color: {GREY}; font-size: 13px; max-width: 900px; }}
-  a {{ color: #124d85; }}
+  a {{ color: {AQUA}; }}
   footer {{ color: {GREY}; font-size: 12px; text-align: center; padding-bottom: 24px; }}
-  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #fef2f2; color: #991b1b;
-           border-top: 1px solid #fecaca; font-size: 14px; padding: 10px 20px; text-align: center; }}
+  .stale {{ position: fixed; left: 0; right: 0; bottom: 0; z-index: 1000; background: #3a1620; color: #ffb3b3;
+           border-top: 1px solid #6b2a35; font-size: 14px; padding: 10px 20px; text-align: center; }}
 </style>
 </head>
 <body data-model="ensemble">
