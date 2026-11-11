@@ -6,8 +6,8 @@ from scipy.stats import gaussian_kde
 
 from risk import ALPHA
 
-INK, GREY, RED, TEAL, ACCENT, GREEN, BEIGE = "#e9f0f7", "#8fa6bd", "#ff7a7a", "#d45c88", "#2fa3b8", "#4fd08a", "rgba(255,255,255,0.28)"
-HATCH = dict(shape="/", fgcolor=RED, bgcolor="rgba(255,122,122,0.08)", size=6, solidity=0.3)
+INK, GREY, RED, TEAL, ACCENT, GREEN, BEIGE = "#1c1917", "#78716c", "#b91c1c", "#1c7fb0", "#c0800c", "#15803d", "#d6d3d1"
+HATCH = dict(shape="/", fgcolor=RED, bgcolor="rgba(185,28,28,0.06)", size=6, solidity=0.3)
 
 
 def legs(f, q, S, cost):
@@ -43,7 +43,7 @@ def promise_strip(d, w=11, g=4, h=46):
     for i, r in enumerate(d.itertuples()):
         x = i * (w + g); miss = r.realized < r.floor
         out += (f"<g><title>{r.date:%a %d %b}: earned {r.realized:,.0f} €, expected {r.expected:,.0f}, bad day {r.floor:,.0f}</title>"
-                f"<rect x='{x}' y='{y(r.expected):.1f}' width='{w}' height='{max(y(r.floor) - y(r.expected), 2):.1f}' rx='2' fill='rgba(255,255,255,0.18)'/>"
+                f"<rect x='{x}' y='{y(r.expected):.1f}' width='{w}' height='{max(y(r.floor) - y(r.expected), 2):.1f}' rx='2' fill='#e7e5e4'/>"
                 f"<circle cx='{x + w / 2}' cy='{y(r.realized):.1f}' r='3.6' fill='{RED if miss else INK}'/></g>")
     W = len(d) * (w + g) - g
     return f"<svg class='pstrip' viewBox='0 0 {W} {h}' width='{W}' height='{h}'>{out}</svg>"
@@ -97,7 +97,7 @@ def trade_chart(f, q, S, cost, label, windows):
     fig.add_trace(go.Scatter(x=step, y=pad(lo), mode="lines", line=dict(width=0, shape="hv"), hoverinfo="skip",
                              showlegend=False), row=1, col=1)
     fig.add_trace(go.Scatter(x=step, y=pad(hi), mode="lines", line=dict(width=0, shape="hv"), fill="tonexty",
-                             fillcolor="rgba(233,240,247,0.08)", name="9 in 10 days inside", hoverinfo="skip"), row=1, col=1)
+                             fillcolor="rgba(28,25,23,0.07)", name="9 in 10 days inside", hoverinfo="skip"), row=1, col=1)
     fig.add_trace(go.Scatter(x=step, y=pad(f), mode="lines", line=dict(color=INK, width=2, shape="hv"),
                              name=f"Forecast ({label})", hoverinfo="skip"), row=1, col=1)
     fig.add_trace(go.Scatter(x=np.arange(24) + 0.5, y=f, mode="markers", marker=dict(size=18, color="rgba(0,0,0,0)"),
@@ -120,7 +120,7 @@ def trade_chart(f, q, S, cost, label, windows):
         fig.add_annotation(x=x0, y=grid[-1], yanchor="bottom", xanchor="left", showarrow=False, align="left",
                            text=f"<b>{title}</b><br>about {np.median(avg):.0f} €/MWh<br><span style='color:{RED}'>1 in 20: "
                                 f"{'above' if tail == 'high' else 'below'} {cut:.0f}</span>",
-                           font=dict(size=11, color=colour), bgcolor="rgba(12,28,48,0.85)", row=1, col=1)
+                           font=dict(size=11, color=colour), bgcolor="rgba(255,255,255,0.9)", row=1, col=1)
 
     # profit density, sideways, from zero
     prof = L["profit"]
