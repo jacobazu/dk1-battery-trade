@@ -1,2 +1,2 @@
-days,first,last,day-ahead only,whole day,split day,"split, no capacity",MWh FCR,MWh aFRR up,MWh mFRR up,split minus whole day,newey-west t,split day wins
-326,2025-11-19,2026-10-10,176.9,521.2,649.8,181.0,13.3,4.7,4.7,128.6,7.13,True
+days,first,last,day-ahead only,whole day,split day,"split, forecast at 07:15 (not possible)","split, no capacity",MWh FCR,MWh aFRR up,MWh mFRR up,split minus whole day,newey-west t,split day wins
+326,2025-11-19,2026-10-10,176.9,521.2,633.6,649.8,181.0,13.3,4.8,4.6,112.4,6.48,True
