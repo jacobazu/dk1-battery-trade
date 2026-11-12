@@ -455,6 +455,22 @@ rv_rows = "".join(f"<tr><td>{p.strftime('%b %Y')}</td>" + "".join(
 picks = rv["pick"].value_counts()
 rv_span = f"{rv['date'].min():%d %b %Y} to {rv['date'].max():%d %b %Y}"
 
+# what does it cost to help energinet? opportunity/RULES.md, results from opportunity/opportunity.py
+op = pd.read_csv("opportunity/results/daily.csv", parse_dates=["date"])
+op_h = pd.read_csv("opportunity/results/hourly.csv").groupby("hour")[["lost", "aFRR up"]].mean()
+op_m, op_t = nw_t(op["split day"] - op["whole day"])
+op_mwh = op[["MWh FCR", "MWh aFRR up", "MWh mFRR up"]].mean()
+fig = go.Figure()
+fig.add_trace(go.Bar(x=op_h.index, y=op_h["lost"], name="Day-ahead profit given up", marker_color=BEIGE,
+                     hovertemplate="%{x}:00 given up %{y:.0f} €<extra></extra>"))
+fig.add_trace(go.Scatter(x=op_h.index, y=op_h["aFRR up"], name="aFRR up pays", mode="lines+markers",
+                         line=dict(color=TEAL, width=2.5, shape="spline"), marker=dict(size=6),
+                         hovertemplate="%{x}:00 aFRR up pays %{y:.0f} €<extra></extra>"))
+fig.update_xaxes(tickvals=list(range(0, 24, 3)), ticktext=[f"{h:02d}:00" for h in range(0, 24, 3)])
+fig.update_yaxes(ticksuffix=" €")
+op_chart = style(fig, 340)
+op_span = f"{op['date'].min():%d %b %Y} to {op['date'].max():%d %b %Y}"
+
 backtest_tabs = {
     "Track record": per_model(1, "Track record"),
     "Risk": per_model(1, "Risk"),
@@ -492,6 +508,26 @@ advance: <b>tomorrow goes to the market that paid most today</b>.</p>
 <li>aFRR prices have fallen a lot as batteries joined.</li>
 <li>No activation energy, wear on reserves or state of charge.</li>
 </ul>''')}
+</div>""",
+    "Helping Energinet": f"""
+<div class='kpis'>
+{kpi("Split day", eur(op['split day'].mean()), "a day, reserves and day-ahead hour by hour", GREEN)}
+{kpi("Whole day, one market", eur(op['whole day'].mean()), "a day, the rule in the tab before", INK)}
+{kpi("Day-ahead only", eur(op['day-ahead only'].mean()), "a day, after fees and wear", ACCENT)}
+{kpi("Held for Energinet", f"{op_mwh.sum():.0f} MW-hours", f"a day: FCR {op_mwh['MWh FCR']:.0f}, aFRR {op_mwh['MWh aFRR up']:.0f}, mFRR {op_mwh['MWh mFRR up']:.0f}", TEAL)}
+</div>
+<div class='grid2'>
+{card(f"What 1 MW of aFRR up costs, by hour of day, {op_span}", op_chart +
+      "<p class='note'>Bars: the day-ahead profit lost by keeping 1 MW and 1 MWh free for Energinet in that hour, "
+      "worked out on the real prices. Line: what aFRR up paid for that hour. Where the line is above the bar, "
+      "helping Energinet pays more than trading.</p>")}
+{card("How it works", f'''
+<p>Rules were committed before the run (<a href="https://github.com/jacobazu/dk1-battery-trade/blob/main/opportunity/RULES.md">RULES.md</a>).</p>
+<p>At 07:30 the day before, one linear program splits each hour's 1 MW between day-ahead trading and capacity for
+FCR, aFRR up and mFRR up. It uses the price forecast and yesterday's reserve prices, then is paid the real ones.</p>
+<p>Holding capacity needs charge: a full hour for aFRR and mFRR, 15 minutes each way for FCR.</p>
+<p>The split day beats one market a day by {eur(op_m)} a day (Newey-West t = {op_t:.1f}). Same weak spots as the tab
+before: price taker, and no activation energy or its wear.</p>''')}
 </div>""",
     "Loss limit": f"""
 <div class='grid2'>
