@@ -511,7 +511,7 @@ advance: <b>tomorrow goes to the market that paid most today</b>.</p>
 </div>""",
     "Helping Energinet": f"""
 <div class='kpis'>
-{kpi("Split day", eur(op['split day'].mean()), "a day, reserves and day-ahead hour by hour", GREEN)}
+{kpi("Split day", eur(op['split day'].mean()), "a day, capacity chosen at 07:15, day-ahead at 10:30", GREEN)}
 {kpi("Whole day, one market", eur(op['whole day'].mean()), "a day, the rule in the tab before", INK)}
 {kpi("Day-ahead only", eur(op['day-ahead only'].mean()), "a day, after fees and wear", ACCENT)}
 {kpi("Held for Energinet", f"{op_mwh.sum():.0f} MW-hours", f"a day: FCR {op_mwh['MWh FCR']:.0f}, aFRR {op_mwh['MWh aFRR up']:.0f}, mFRR {op_mwh['MWh mFRR up']:.0f}", TEAL)}
@@ -523,8 +523,11 @@ advance: <b>tomorrow goes to the market that paid most today</b>.</p>
       "helping Energinet pays more than trading.</p>")}
 {card("How it works", f'''
 <p>Rules were committed before the run (<a href="https://github.com/jacobazu/dk1-battery-trade/blob/main/opportunity/RULES.md">RULES.md</a>).</p>
-<p>At 07:30 the day before, one linear program splits each hour's 1 MW between day-ahead trading and capacity for
-FCR, aFRR up and mFRR up. It uses the price forecast and yesterday's reserve prices, then is paid the real ones.</p>
+<p>At 07:15 the day before, before Energinet's capacity auctions close, a linear program chooses each hour's capacity
+for FCR, aFRR up and mFRR up. The price forecast isn't out yet, so it uses what is known: today's day-ahead and reserve
+prices. At 10:30 the price forecast plans day-ahead trading in the power and charge left. Both are paid the real prices.</p>
+<p>A first version chose the capacity on the 10:30 forecast, which isn't out at 07:15. It gave
+{eur(op['split, forecast at 07:15 (not possible)'].mean())} a day; the honest version gives {eur(op['split day'].mean())}.</p>
 <p>Holding capacity needs charge: a full hour for aFRR and mFRR, 15 minutes each way for FCR.</p>
 <p>The split day beats one market a day by {eur(op_m)} a day (Newey-West t = {op_t:.1f}). Same weak spots as the tab
 before: price taker, and no activation energy or its wear.</p>''')}
@@ -676,6 +679,52 @@ if (saved && document.querySelector(`.models button[data-model="${{saved}}"]`)) 
 </html>
 """
 
+
+# live split day: capacity saved each morning before 07:30 by opportunity/live.py, scored when the day is over
+def live_split():
+    cp = Path("opportunity/live_capacity.csv"); sc = Path("opportunity/live_scored.csv")
+    caps = pd.read_csv(cp, parse_dates=["date"]) if cp.exists() else None
+    parts = []
+    if caps is not None and len(caps):
+        d = caps["date"].max(); g = caps[caps["date"] == d].sort_values("hour")
+        fig = go.Figure()
+        for k, col in zip(["FCR", "aFRR up", "mFRR up"], [ACCENT, TEAL, INK]):
+            fig.add_trace(go.Bar(x=g["hour"], y=g[k], name=k, marker_color=col,
+                                 hovertemplate=f"%{{x}}:00 {k} %{{y:.2f}} MW<extra></extra>"))
+        fig.update_layout(barmode="stack")
+        fig.update_xaxes(tickvals=list(range(0, 24, 3)), ticktext=[f"{h:02d}:00" for h in range(0, 24, 3)])
+        fig.update_yaxes(range=[0, 1.05], ticksuffix=" MW")
+        parts.append(card(f"Capacity for {d:%A %d %b}, saved {g['made_utc'].iloc[0]} UTC, before the 07:30 auctions",
+                          style(fig, 300) + "<p class='note'>What is left of the 1 MW goes to day-ahead trading, "
+                          "planned on the price forecast later in the morning.</p>"))
+    else:
+        parts.append(card("Capacity", "<p class='note'>The first choice is saved before 07:30 on 13 Nov 2026, "
+                                       "for 14 Nov.</p>"))
+    s_ = pd.read_csv(sc, parse_dates=["date"]) if sc.exists() else None
+    if s_ is not None and len(s_):
+        rows = "".join(f"<tr><td>{r.date:%d %b}</td><td class='n'>{eur(r['capacity part'])}</td>"
+                       f"<td class='n'>{eur(r['day-ahead part'])}</td><td class='n'><b>{eur(r['split day'])}</b></td>"
+                       f"<td class='n'>{eur(r['day-ahead only'])}</td></tr>" for _, r in s_.iloc[::-1].iterrows())
+        kp = f"""<div class='kpis'>
+{kpi("Split day", eur(s_['split day'].mean()), f"a day, {len(s_)} day{'s' if len(s_) > 1 else ''}", GREEN)}
+{kpi("Day-ahead only", eur(s_['day-ahead only'].mean()), "a day, same days", ACCENT)}
+{kpi("Paid for capacity", eur(s_['capacity part'].mean()), "a day", TEAL)}
+{kpi("Held for Energinet", f"{s_[['MWh FCR', 'MWh aFRR up', 'MWh mFRR up']].sum(axis=1).mean():.0f} MW-hours", "a day", INK)}
+</div>"""
+        parts.append(card("Each day, paid at the real prices", "<table><tr><th>Day</th><th class='n'>Capacity</th>"
+                          "<th class='n'>Day-ahead part</th><th class='n'>Split day</th><th class='n'>Day-ahead only</th>"
+                          f"</tr>{rows}</table>"))
+    else:
+        kp = ""
+        parts.append(card("Each day, paid at the real prices", "<p class='note'>Starts when the first day is over.</p>"))
+    return kp + "<div class='grid2'>" + "".join(parts) + "</div>" + (
+        "<p class='note'>Paper trading, same rules as the backtest "
+        "(<a href='https://github.com/jacobazu/dk1-battery-trade/blob/main/opportunity/RULES.md'>RULES.md</a>, "
+        "<a href='backtest.html'>backtest tab Helping Energinet</a>). Price taker, no activation energy.</p>")
+
+
+live_tabs = {k: v for k, v in [*[(k, v) for k, v in live_tabs.items() if k != "Method"],
+                                ("Helping Energinet", live_split()), ("Method", live_tabs["Method"])]}
 
 Path("docs").mkdir(exist_ok=True)
 Path("docs/index.html").write_text(
