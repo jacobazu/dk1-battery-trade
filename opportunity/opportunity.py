@@ -26,11 +26,11 @@ PRODUCTS = ["FCR", "aFRR up", "mFRR up"]
 C = costs()
 
 
-def reserve_prices():
+def reserve_prices(start="2025-10-01"):
     """€ per MW and hour in each reserve market, by danish date and hour (hourly mean where the market is finer)."""
     out = []
     for market, (name, time_col, price, dk1) in MARKETS.items():
-        params = {"start": "2025-10-01", "end": "now+P2D", "limit": 0, "sort": f"{time_col} ASC"}
+        params = {"start": start, "end": "now+P2D", "limit": 0, "sort": f"{time_col} ASC"}
         if dk1:
             params["filter"] = '{"PriceArea":["DK1"]}'
         for attempt in range(5):
@@ -49,7 +49,7 @@ def reserve_prices():
     return pd.concat(out, axis=1).reset_index()
 
 
-def plan(price, res, force=None, cyclic=True, setup=SETUP, c=C):
+def plan(price, res, force=None, cyclic=True, fix=None, setup=SETUP, c=C):
     """Day-ahead plan and capacity per hour that earn the most at day-ahead `price` and reserve prices `res`
     (24 x 3, € per MW and hour). force=(product, hour) holds exactly 1 MW of that product in that hour and nothing
     else. Returns (net sale per hour, capacity 24 x 3)."""
@@ -94,6 +94,8 @@ def plan(price, res, force=None, cyclic=True, setup=SETUP, c=C):
         upper[r] = 0
         prod, hour = force
         lower[r[hour, PRODUCTS.index(prod)]] = upper[r[hour, PRODUCTS.index(prod)]] = P
+    if fix is not None:   # capacity already sold: only the day-ahead plan is left to choose
+        lower[r] = upper[r] = np.asarray(fix)
     integer = np.zeros(nv); integer[u] = 1
     obj = np.zeros(nv)
     obj[ch], obj[dis] = np.asarray(price) + c["buy"], -np.asarray(price) + c["sell"]
@@ -127,11 +129,20 @@ def main():
             continue
         g = g.sort_values("hour")
         p_hat, p = g.ensemble.to_numpy(), g.actual.to_numpy()
-        q, cap = plan(p_hat, R[prev])                       # rule 3: decided with what was known
+        p_prev = fc[fc.date == prev].sort_values("hour").actual.to_numpy()
+        if len(p_prev) != 24 or np.isnan(p_prev).any():
+            continue
+        # rule 3. 07:15: capacity, on what is known then (today's day-ahead prices as tomorrow's, today's reserve
+        # prices). 10:30: the day-ahead plan in what is left, on the price forecast
+        _, cap = plan(p_prev, R[prev])
+        q, _ = plan(p_hat, None, fix=cap)
         split = da_value(q, p) + float(np.nansum(cap * R[d]))
+        # the first run (11 nov) used the 10:30 forecast for the capacity too, which isn't out at 07:15
+        q1, cap1 = plan(p_hat, R[prev])
         q0, _ = plan(p_hat, None)                           # the same machinery with no capacity, a check
         days.append({"date": d, "day-ahead only": rv.at[d, "day-ahead"], "whole day": rv.at[d, "rule"],
-                     "split day": split, "split, no capacity": da_value(q0, p),
+                     "split day": split, "split, forecast at 07:15 (not possible)": da_value(q1, p) + float(np.nansum(cap1 * R[d])),
+                     "split, no capacity": da_value(q0, p),
                      **{f"MWh {k}": cap[:, i].sum() for i, k in enumerate(PRODUCTS)}})
         base = da_value(plan(p, None)[0], p)                # hindsight, as RULES says
         for h in range(24):

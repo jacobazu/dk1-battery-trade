@@ -1,0 +1,38 @@
+# each morning before energinet's capacity auctions close (07:30): save tomorrow's capacity, score the days that are over.
+# three tries, as github's schedule can run late. a run after 07:25 danish time saves nothing
+name: opportunity live
+
+on:
+  schedule:
+    - cron: "40 4 * * *"   # 05:40 danish winter time, 06:40 summer
+    - cron: "5 5 * * *"
+    - cron: "40 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: opportunity-live
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python opportunity/live.py
+      - name: Save
+        run: |
+          git config user.name jacobazu
+          git config user.email jacobqazizada12@gmail.com
+          git add opportunity/live_capacity.csv opportunity/live_scored.csv 2>/dev/null || true
+          git diff --cached --quiet && exit 0
+          git commit -m "split day: capacity saved $(date -u '+%F %H:%M') UTC"
+          for try in 1 2 3; do git pull --rebase && git push && exit 0; sleep 15; done
+          exit 1

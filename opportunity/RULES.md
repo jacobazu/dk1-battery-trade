@@ -24,18 +24,24 @@ charge, so in the split day the battery ends the day with at least the charge it
 - Capacity can be any amount from 0 to 1 MW in each hour and product.
 - Price taker: capacity is paid the hourly clearing price. Activation energy is not paid or counted.
 
-## Information, decided at 07:30 the day before
+## Information, in two steps (corrected 12 November 2026, see below)
 
-- Reserve prices for day D: the same hour on D-1, the last known (the same rule as reserves.py).
-- Day-ahead prices for day D: the price repo's ensemble forecast, made before the auction.
-- One linear program per day picks capacity and the day-ahead plan together. Both are then paid at the real prices of
-  day D.
+- 07:15 the day before, capacity: Energinet's capacity auctions close around 07:30 (FCR 08:00), before the price
+  forecast is out. So the capacity for day D is chosen on what is known then: D-1's day-ahead prices as D's, and D-1's
+  reserve prices.
+- About 10:30, the day-ahead plan: with the capacity fixed, the price repo's ensemble forecast plans day-ahead
+  trading in the power and charge that are left.
+- Both are then paid at the real prices of day D.
+
+Correction: the first run (early on 12 November) chose the capacity on the 10:30 price forecast, which doesn't exist at 07:15.
+It gave 650 € a day. It stays in results/daily.csv as "split, forecast at 07:15 (not possible)", but the test uses the
+corrected rule.
 
 ## Rules compared, on the days in results/reserves_daily.csv
 
 1. Day-ahead only (this repo's plan).
 2. Whole day in the market that paid most on D-1 (reserves.py).
-3. Split day: the linear program above.
+3. Split day: the two steps above.
 
 Main test: 3 against 2, € per day, Newey-West t with 7 lags. Split day wins only if t > 2.
 
