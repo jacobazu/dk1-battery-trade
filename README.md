@@ -6,9 +6,9 @@ Dashboard: [jacobazu.github.io/dk1-battery-trade](https://jacobazu.github.io/dk1
 
 Methods: [one page (PDF)](notes/method.pdf)
 
-## The real test
+## Live first
 
-A backtest shows that the battery would have earned money. It doesn't show that it will. I made my choices with the backtest period in view, so the backtest is probably a bit too good. The live plans are made from forecasts saved before the auction, so they can't be adjusted afterwards. That's the interesting part, so the dashboard's main page only shows the P&L since launch on 13 Oct 2026. The backtest has its own page.
+The dashboard's main page shows only the paper P&L since 13 Oct 2026, planned on forecasts saved before each auction. The backtest is on its own page, and is probably a bit flattering since I built the plan with that period in view.
 
 ## Day-ahead or Energinet's reserves
 
