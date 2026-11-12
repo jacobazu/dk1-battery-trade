@@ -1,0 +1,30 @@
+# what does it cost a battery to help energinet? rules in opportunity/RULES.md. runs on a change to the code, saves results
+name: opportunity
+
+on:
+  push:
+    branches: [main]
+    paths: ["opportunity/opportunity.py", ".github/workflows/opportunity.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python opportunity/opportunity.py
+      - name: Save results
+        run: |
+          git config user.name jacobazu
+          git config user.email jacobqazizada12@gmail.com
+          git add opportunity/results
+          git diff --cached --quiet || git commit -m "opportunity cost: results"
+          git pull --rebase && git push

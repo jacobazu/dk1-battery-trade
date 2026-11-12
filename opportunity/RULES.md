@@ -10,8 +10,10 @@ much, in which hours, and does splitting the day between the two beat both of to
 
 ## Battery
 
-1 MW / 2 MWh, 90% round trip, at most one full cycle a day, empty at the start and end of each day, fees and 20 €/MWh
-wear on each MWh sold (the main case in this repo).
+1 MW / 2 MWh, 90% round trip, at most one full cycle a day, fees and 20 €/MWh wear on each MWh sold (the main case in
+this repo). Day-ahead only starts and ends the day empty, as in the rest of the repo. Holding capacity at midnight needs
+charge, so in the split day the battery ends the day with at least the charge it started with (added before any run,
+12 November 2026).
 
 ## Holding capacity, per hour
 
