@@ -45,7 +45,9 @@ def main():
     else:
         p, r = day(px, today, ["price"])[:, 0], day(res, today, PRODUCTS)
         if np.isnan(p).any() or np.isnan(r).all(axis=0).any():
-            print(f"today's day-ahead or reserve prices aren't complete, nothing saved for {tomorrow:%d %b}")
+            print(f"today's day-ahead or reserve prices aren't complete, nothing saved for {tomorrow:%d %b}: "
+                  f"{int(np.isnan(p).sum())} day-ahead hours missing, reserve hours per product "
+                  f"{dict(zip(PRODUCTS, (~np.isnan(r)).sum(axis=0).tolist()))}")
         else:
             _, cap = plan(p, r)
             new = pd.DataFrame({"made_utc": datetime.utcnow().strftime("%Y-%m-%d %H:%M"), "date": tomorrow,
