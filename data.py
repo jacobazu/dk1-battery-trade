@@ -13,9 +13,29 @@ def load_backtest():
     return fc[["date", "hour", "actual"] + MODELS].sort_values(["date", "hour"])
 
 
+def eds_prices(days_back=4):
+    """The newest DK1 day-ahead prices straight from Energi Data Service, up to tomorrow once Nord Pool has published
+    them (about 13:00). The price repo's file only gets them with its next morning run. Empty if it fails."""
+    try:
+        import requests
+        start = (pd.Timestamp.now(tz="Europe/Copenhagen") - pd.Timedelta(days=days_back)).strftime("%Y-%m-%d")
+        r = requests.get("https://api.energidataservice.dk/dataset/DayAheadPrices", timeout=60,
+                         params={"start": start, "end": "now+P2D", "filter": '{"PriceArea":["DK1"]}', "limit": 0})
+        r.raise_for_status()
+        d = pd.DataFrame(r.json()["records"])
+        return pd.DataFrame({"time": pd.to_datetime(d["TimeUTC"], utc=True), "price": d["DayAheadPriceEUR"]}).dropna()
+    except Exception as e:
+        print("energi data service prices skipped:", e)
+        return pd.DataFrame(columns=["time", "price"])
+
+
 def live_prices():
     """Live DK1 prices by Danish date and hour, as build_daily() in R."""
     p = pd.read_csv(REPO + "live/prices_dk1_live.csv", parse_dates=["time"])
+    new = eds_prices()
+    if len(new):   # quarter-hours from energi data service where the file has nothing yet
+        new = new[new["time"] > p["time"].max()]
+        p = pd.concat([p[["time", "price"]], new], ignore_index=True)
     local = p["time"].dt.tz_convert("Europe/Copenhagen")
     p["date"] = local.dt.tz_localize(None).dt.normalize()
     p["hour"] = local.dt.hour

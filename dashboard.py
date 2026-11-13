@@ -216,6 +216,12 @@ def model_pages(m):
         x, step = np.arange(24) + 0.5, np.arange(25)
         ticks = dict(range=[0, 24], tickvals=list(range(0, 25, 3)), ticktext=[f"{h:02d}:00" for h in range(0, 25, 3)])
         fig, L = trade_chart(f, q, S, nxt["cost"], label, windows)
+        # once nord pool has published the day's prices (about 13:00 the day before), they go on top of the forecast
+        a_next = fc[fc["date"] == latest].sort_values("hour")["actual"].to_numpy()
+        if len(a_next) == 24 and not np.isnan(a_next).any():
+            fig.add_trace(go.Scatter(x=np.arange(24) + 0.5, y=a_next, mode="markers", name="Actual price",
+                                     marker=dict(size=7, color="#ffffff", line=dict(color=INK, width=1.8)),
+                                     hovertemplate="Actual %{y:.0f} €/MWh<extra></extra>"), row=1, col=1)
         fig.update_layout(legend=dict(y=-0.08))
         plan_chart = style(fig, 440, top=30)
         p_loss = float((L["profit"] < 0).mean())
@@ -253,11 +259,15 @@ def model_pages(m):
         recent = done.tail(30)
         k30 = int((recent["realized"] < recent["floor"]).sum())
         pl = "<1%" if round(p_loss * 100) == 0 else f"{p_loss:.0%}"
+        # what the plan earns at the real prices, once they are out; until then when they come
+        actual_piece = (f"<div><span>at the actual prices</span><b style='color:{GREEN if nxt['realized'] >= 0 else RED}'>"
+                        f"{eur(nxt['realized'])}</b></div>" if not np.isnan(nxt["realized"]) else
+                        f"<div><span>actual prices</span><b style='color:{GREY}'>at 13:00</b></div>")
         live["Plan"] = f"""
 <div class='card plain'>
 <div class='big'><div><span>{day}, expected</span><b>{eur(nxt['expected'])}</b></div>
 <div><span>bad day (1 in 20)</span><b style='color:{RED}'>{eur(nxt['floor'])}</b></div>
-<div><span>chance of a loss</span><b>{pl}</b></div>
+{actual_piece}
 <div class='strip'><span>last {len(recent)} days · {k30} below the bad day</span>{promise_strip(recent)}</div></div>
 </div>
 <div class='grid2'>

@@ -3,6 +3,10 @@ name: dashboard
 on:
   schedule:
     - cron: "7 10 * * *"   # 10:07 UTC, after the price repo has saved tomorrow's forecast
+    # afternoon: nord pool publishes tomorrow's prices about 13:00 danish time, so the plan can be shown at them
+    - cron: "20 12 * * *"
+    - cron: "20 13 * * *"
+    - cron: "20 14 * * *"
   push:
     branches: [main]
   workflow_dispatch:
