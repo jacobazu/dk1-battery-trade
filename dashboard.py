@@ -704,15 +704,20 @@ def live_split():
         fig.update_layout(barmode="stack")
         fig.update_xaxes(tickvals=list(range(0, 24, 3)), ticktext=[f"{h:02d}:00" for h in range(0, 24, 3)])
         fig.update_yaxes(range=[0, 1.05], ticksuffix=" MW")
+        miss = g["missing"].dropna().iloc[0] if "missing" in g and g["missing"].notna().any() else ""
         parts.append(card(f"Capacity for {d:%A %d %b}, saved {g['made_utc'].iloc[0]} UTC, before the 07:30 auctions",
                           style(fig, 300) + "<p class='note'>What is left of the 1 MW goes to day-ahead trading, "
-                          "planned on the price forecast later in the morning.</p>"))
+                          "planned on the price forecast later in the morning."
+                          + (f" Energinet published no {miss} prices that morning, so {miss} was left out." if miss else "")
+                          + "</p>"))
     else:
         parts.append(card("Capacity", "<p class='note'>The first choice is saved before 07:30 on 13 Nov 2026, "
                                        "for 14 Nov.</p>"))
     s_ = pd.read_csv(sc, parse_dates=["date"]) if sc.exists() else None
     if s_ is not None and len(s_):
-        rows = "".join(f"<tr><td>{r.date:%d %b}</td><td class='n'>{eur(r['capacity part'])}</td>"
+        miss = s_["missing"].fillna("") if "missing" in s_ else pd.Series("", index=s_.index)
+        s_ = s_.assign(missing=miss)
+        rows = "".join(f"<tr><td>{r.date:%d %b}{' *' if r['missing'] else ''}</td><td class='n'>{eur(r['capacity part'])}</td>"
                        f"<td class='n'>{eur(r['day-ahead part'])}</td><td class='n'><b>{eur(r['split day'])}</b></td>"
                        f"<td class='n'>{eur(r['day-ahead only'])}</td></tr>" for _, r in s_.iloc[::-1].iterrows())
         kp = f"""<div class='kpis'>
@@ -723,7 +728,8 @@ def live_split():
 </div>"""
         parts.append(card("Each day, paid at the real prices", "<table><tr><th>Day</th><th class='n'>Capacity</th>"
                           "<th class='n'>Day-ahead part</th><th class='n'>Split day</th><th class='n'>Day-ahead only</th>"
-                          f"</tr>{rows}</table>"))
+                          f"</tr>{rows}</table>" + ("<p class='note'>* No FCR price from Energinet that morning, so FCR "
+                          "was left out that day.</p>" if (s_["missing"] != "").any() else "")))
     else:
         kp = ""
         parts.append(card("Each day, paid at the real prices", "<p class='note'>Starts when the first day is over.</p>"))

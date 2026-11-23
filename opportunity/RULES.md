@@ -37,6 +37,11 @@ Correction: the first run (early on 12 November) chose the capacity on the 10:30
 It gave 650 € a day. It stays in results/daily.csv as "split, forecast at 07:15 (not possible)", but the test uses the
 corrected rule.
 
+Exception from 23 November 2026: Energinet's FCR prices (FcrDK1) stopped after 21 November. A day whose morning has no
+price at all for a product is still saved, with no capacity in that product and the product named in the column
+"missing". Those days are scored as they are and marked on the page. When the prices come back, the days are made
+again as they would have been with them, saved apart as backfilled, and the live days stay as saved.
+
 ## Rules compared, on the days in results/reserves_daily.csv
 
 1. Day-ahead only (this repo's plan).

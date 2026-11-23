@@ -44,14 +44,23 @@ def main():
         print(f"capacity for {tomorrow:%d %b} already saved")
     else:
         p, r = day(px, today, ["price"])[:, 0], day(res, today, PRODUCTS)
-        if np.isnan(p).any() or np.isnan(r).all(axis=0).any():
+        # a product energinet hasn't published at all today is left out: no capacity in it, noted in "missing".
+        # since 23 nov 2026 for fcr (FcrDK1 stopped after 21 nov); see RULES.md
+        gone = [k for i, k in enumerate(PRODUCTS) if np.isnan(r[:, i]).all()]
+        if np.isnan(p).any() or len(gone) == len(PRODUCTS):
             print(f"today's day-ahead or reserve prices aren't complete, nothing saved for {tomorrow:%d %b}: "
                   f"{int(np.isnan(p).sum())} day-ahead hours missing, reserve hours per product "
                   f"{dict(zip(PRODUCTS, (~np.isnan(r)).sum(axis=0).tolist()))}")
         else:
+            r = np.where(np.isnan(r), -1e3, r)               # a price no plan would sell at
             _, cap = plan(p, r)
+            for k in gone:
+                cap[:, PRODUCTS.index(k)] = 0
+            if gone:
+                print(f"no {', '.join(gone)} prices today, left out for {tomorrow:%d %b}")
             new = pd.DataFrame({"made_utc": datetime.utcnow().strftime("%Y-%m-%d %H:%M"), "date": tomorrow,
-                                "hour": range(24), **{k: np.round(cap[:, i], 3) for i, k in enumerate(PRODUCTS)}})
+                                "hour": range(24), **{k: np.round(cap[:, i], 3) for i, k in enumerate(PRODUCTS)},
+                                "missing": ", ".join(gone)})
             saved = pd.concat([saved, new]) if len(saved) else new
             saved.to_csv(CAP, index=False, date_format="%Y-%m-%d")
             print(f"saved capacity for {tomorrow:%d %b}: " +
@@ -64,12 +73,17 @@ def main():
         g = lv[lv.date == d].sort_values("hour")
         cap = day(saved, d, PRODUCTS)
         r_real = day(res, d, PRODUCTS) if d in set(res.date) else None
-        if len(g) != 24 or g.actual.isna().any() or r_real is None or np.isnan(r_real).all(axis=0).any():
+        if len(g) != 24 or g.actual.isna().any() or r_real is None:
+            continue
+        # a product with no real prices can only be scored if no capacity was held in it
+        if any(np.isnan(r_real[:, i]).all() and cap[:, i].sum() > 0 for i in range(len(PRODUCTS))):
             continue
         p_hat, p = g.ensemble.to_numpy(), g.actual.to_numpy()
         q, _ = plan(p_hat, None, fix=cap)
         q0, _ = plan(p_hat, None, cyclic=False)           # day-ahead only, as the live page
-        rows.append({"date": d, "day-ahead part": da_value(q, p), "capacity part": float(np.nansum(cap * r_real)),
+        miss = saved.loc[saved.date == d, "missing"].dropna() if "missing" in saved else pd.Series(dtype=str)
+        rows.append({"date": d, "missing": miss.iloc[0] if len(miss) else "",
+                     "day-ahead part": da_value(q, p), "capacity part": float(np.nansum(cap * r_real)),
                      "day-ahead only": da_value(q0, p),
                      **{f"MWh {k}": cap[:, i].sum() for i, k in enumerate(PRODUCTS)}})
     if rows:
