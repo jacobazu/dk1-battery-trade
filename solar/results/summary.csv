@@ -1,0 +1,2 @@
+days,first,last,A € a day,B € a day,C € a day,C minus A,newey-west t,C wins,B minus A,B newey-west t,A sun hours past the battery,B sun hours past the battery,C sun hours past the battery,A imbalance € a day,B imbalance € a day,C imbalance € a day,C buffer short hours
+250,2026-02-01,2026-10-10,348.5067,516.3371,854.0315,505.5248,12.0264,True,167.8304,11.0805,0.9238,0.307,0.1845,15.6228,-3.3602,9.0739,613
