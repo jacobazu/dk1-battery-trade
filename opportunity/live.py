@@ -22,6 +22,7 @@ from opportunity import PRODUCTS, da_value, plan, reserve_prices  # noqa: E402
 
 CAP = HERE / "live_capacity.csv"
 SCORED = HERE / "live_scored.csv"
+CAP_BF, SCORED_BF = HERE / "live_capacity_backfill.csv", HERE / "live_scored_backfill.csv"   # backfill.py
 START = pd.Timestamp("2026-11-13")
 
 
@@ -66,8 +67,22 @@ def main():
             print(f"saved capacity for {tomorrow:%d %b}: " +
                   ", ".join(f"{k} {cap[:, i].sum():.1f} MW-hours" for i, k in enumerate(PRODUCTS)))
 
-    # 2. score the days that are over
-    lv = load_live(START - pd.Timedelta(days=1))
+    # 2. score the days that are over, live and backfilled, each in its own file
+    for cap_file, out_file in ((CAP, SCORED), (CAP_BF, SCORED_BF)):
+        if cap_file.exists():
+            s = pd.read_csv(cap_file, parse_dates=["date"])
+            # days already scored stay as they are; res only reaches 10 days back
+            old = pd.read_csv(out_file, parse_dates=["date"]) if out_file.exists() else pd.DataFrame(columns=["date"])
+            new = score(s[~s.date.isin(set(old.date))], res) if (~s.date.isin(set(old.date))).any() else pd.DataFrame()
+            sc = pd.concat([old, new], ignore_index=True).sort_values("date") if len(new) else old
+            if len(new):
+                sc.round(2).to_csv(out_file, index=False, date_format="%Y-%m-%d")
+                print(cap_file.name, "\n", sc.round(1).tail(5).to_string(index=False))
+
+
+def score(saved, res):
+    """days that are over: the day-ahead plan in the power left, paid at the real prices, plus the capacity"""
+    lv = load_live(saved.date.min() - pd.Timedelta(days=1))
     rows = []
     for d in sorted(set(saved.date)):
         g = lv[lv.date == d].sort_values("hour")
@@ -83,14 +98,14 @@ def main():
         q0, _ = plan(p_hat, None, cyclic=False)           # day-ahead only, as the live page
         miss = saved.loc[saved.date == d, "missing"].dropna() if "missing" in saved else pd.Series(dtype=str)
         rows.append({"date": d, "missing": miss.iloc[0] if len(miss) else "",
+                     **({"remake": bool(saved.loc[saved.date == d, "remake"].iloc[0])} if "remake" in saved else {}),
                      "day-ahead part": da_value(q, p), "capacity part": float(np.nansum(cap * r_real)),
                      "day-ahead only": da_value(q0, p),
                      **{f"MWh {k}": cap[:, i].sum() for i, k in enumerate(PRODUCTS)}})
-    if rows:
-        sc = pd.DataFrame(rows)
+    sc = pd.DataFrame(rows)
+    if len(sc):
         sc["split day"] = sc["day-ahead part"] + sc["capacity part"]
-        sc.round(2).to_csv(SCORED, index=False, date_format="%Y-%m-%d")
-        print(sc.round(1).tail(5).to_string(index=False))
+    return sc
 
 
 if __name__ == "__main__":

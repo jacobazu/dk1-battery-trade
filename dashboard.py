@@ -710,7 +710,8 @@ def split_days(caps):
             q, _, soc = plan(f.ensemble.to_numpy(), None, fix=cap, soc=True)
             q = np.where(np.abs(q) < 1e-6, 0, q)
         miss = g["missing"].dropna() if "missing" in g else pd.Series(dtype=str)
-        out[d] = {"cap": cap, "q": q, "soc": soc, "made": g["made_utc"].iloc[0], "missing": miss.iloc[0] if len(miss) else ""}
+        out[d] = {"cap": cap, "q": q, "soc": soc, "made": g["made_utc"].iloc[0], "missing": miss.iloc[0] if len(miss) else "",
+                  "backfill": g["kind"].iloc[0] == "backfill"}
     return out
 
 
@@ -750,7 +751,8 @@ def days_strip(days, scored):
         parts = np.column_stack([x["cap"], np.clip(q, 0, None), np.clip(-q, 0, None)])
         top = np.where(parts.max(axis=1) < 0.05, 5, parts.argmax(axis=1))
         s = scored.get(d)
-        names.append(f"{d:%a %d %b}{' *' if x['missing'] else ''}   " + (eur(s) if s is not None else "not scored"))
+        names.append(f"{d:%a %d %b}{' *' if x['backfill'] else ''}{' no FCR' if x['missing'] else ''}   "
+                     + (eur(s) if s is not None else "not scored"))
         z.append(top.tolist())
         txt.append([", ".join(f"{k} {v:.2f}" for k, v in zip(keys[:5], parts[h]) if v >= 0.01) or "idle" for h in range(24)])
     n = len(keys)
@@ -766,9 +768,17 @@ def days_strip(days, scored):
 
 
 def live_split():
-    cp = Path("opportunity/live_capacity.csv"); sc = Path("opportunity/live_scored.csv")
-    caps = pd.read_csv(cp, parse_dates=["date"]) if cp.exists() else None
-    s0 = pd.read_csv(sc, parse_dates=["date"]) if sc.exists() else None
+    # live files and the backfilled days (opportunity/backfill.py), read apart and starred
+    def both(name):
+        fs = [pd.read_csv(f"opportunity/{name}{tail}.csv", parse_dates=["date"]).assign(kind=kind)
+              for tail, kind in (("", "live"), ("_backfill", "backfill")) if Path(f"opportunity/{name}{tail}.csv").exists()]
+        return pd.concat(fs, ignore_index=True) if fs else None
+    caps, s0 = both("live_capacity"), both("live_scored")
+    # a live day made again later (fcr back) stays live in the strip; the remake is only a row in the table
+    if caps is not None and "remake" in caps:
+        caps = caps[caps["remake"].fillna(False).astype(bool) == False]  # noqa: E712
+    if s0 is not None:
+        s0 = s0.assign(remake=s0["remake"].fillna(False).astype(bool) if "remake" in s0 else False)
     parts = []
     if caps is not None and len(caps):
         days = split_days(caps)
@@ -782,30 +792,41 @@ def live_split():
         if x["missing"]:
             note += f" Energinet published no {x['missing']} prices that morning, so {x['missing']} was left out."
         parts.append(card(f"{d:%A %d %b}, hour by hour", day_chart(x) + f"<p class='note'>{note}</p>"))
-        scored = dict(zip(s0["date"], s0["split day"])) if s0 is not None and len(s0) else {}
+        one = s0[~s0["remake"]] if s0 is not None else None   # the strip shows the day as saved, not its remake
+        scored = dict(zip(one["date"], one["split day"])) if one is not None and len(one) else {}
         parts.append(card("Every day so far", days_strip(days, scored) +
                           "<p class='note'>What most of the 1 MW did each hour. Right of the date: the day paid at the real "
-                          "prices. * No FCR price from Energinet that morning.</p>"))
+                          "prices. * Backfilled. No FCR: Energinet published no FCR price that morning.</p>"))
     else:
         parts.append(card("Capacity", "<p class='note'>The first choice is saved before 07:30 on 13 Nov 2026, "
                                        "for 14 Nov.</p>"))
     s_ = s0
     if s_ is not None and len(s_):
-        miss = s_["missing"].fillna("") if "missing" in s_ else pd.Series("", index=s_.index)
-        s_ = s_.assign(missing=miss)
-        rows = "".join(f"<tr><td>{r.date:%d %b}{' *' if r['missing'] else ''}</td><td class='n'>{eur(r['capacity part'])}</td>"
+        s_ = s_.assign(missing=s_["missing"].fillna("") if "missing" in s_ else "").sort_values("date")
+        lv_, bf_ = s_[s_["kind"] == "live"], s_[(s_["kind"] == "backfill") & ~s_["remake"]]
+        rows = "".join(f"<tr><td>{r.date:%d %b}{' *' if r['kind'] == 'backfill' else ''}"
+                       f"{' remade with FCR' if r['remake'] else ''}{' no FCR' if r['missing'] else ''}</td>"
+                       f"<td class='n'>{eur(r['capacity part'])}</td>"
                        f"<td class='n'>{eur(r['day-ahead part'])}</td><td class='n'><b>{eur(r['split day'])}</b></td>"
                        f"<td class='n'>{eur(r['day-ahead only'])}</td></tr>" for _, r in s_.iloc[::-1].iterrows())
+        n = len(lv_)
         kp = f"""<div class='kpis'>
-{kpi("Split day", eur(s_['split day'].mean()), f"a day, {len(s_)} day{'s' if len(s_) > 1 else ''}", GREEN)}
-{kpi("Day-ahead only", eur(s_['day-ahead only'].mean()), "a day, same days", ACCENT)}
-{kpi("Paid for capacity", eur(s_['capacity part'].mean()), "a day", TEAL)}
-{kpi("Held for Energinet", f"{s_[['MWh FCR', 'MWh aFRR up', 'MWh mFRR up']].sum(axis=1).mean():.0f} MW-hours", "a day", INK)}
+{kpi("Split day, live", eur(lv_['split day'].mean()) if n else "–", f"a day, {n} live day{'' if n == 1 else 's'}", GREEN)}
+{kpi("Day-ahead only, live", eur(lv_['day-ahead only'].mean()) if n else "–", "a day, same days", ACCENT)}
+{kpi("Split day, backfilled *", eur(bf_['split day'].mean()) if len(bf_) else "–", f"a day, {len(bf_)} days made afterwards", GREY)}
+{kpi("Day-ahead only, backfilled *", eur(bf_['day-ahead only'].mean()) if len(bf_) else "–", "a day, same days", GREY)}
 </div>"""
         parts.append(card("Each day, paid at the real prices", "<table><tr><th>Day</th><th class='n'>Capacity</th>"
                           "<th class='n'>Day-ahead part</th><th class='n'>Split day</th><th class='n'>Day-ahead only</th>"
-                          f"</tr>{rows}</table>" + ("<p class='note'>* No FCR price from Energinet that morning, so FCR "
-                          "was left out that day.</p>" if (s_["missing"] != "").any() else "")))
+                          f"</tr>{rows}</table>"
+                          + ("<p class='note'>* Backfilled: made afterwards by the same rules, only from forecasts and "
+                             "prices out before each morning, kept in their own files "
+                             "(opportunity/live_capacity_backfill.csv). The other days were saved before Energinet's "
+                             "auctions and never changed. Remade with FCR: a live day saved without FCR, made again "
+                             "once Energinet's FCR prices were back (RULES.md); the live row stays as saved and counts, "
+                             "the remake doesn't.</p>" if len(bf_) else "")
+                          + ("<p class='note'>No FCR: Energinet published no FCR price that morning, so FCR was left "
+                             "out that day.</p>" if (s_["missing"] != "").any() else "")))
     else:
         kp = ""
         parts.append(card("Each day, paid at the real prices", "<p class='note'>Starts when the first day is over.</p>"))
@@ -814,6 +835,50 @@ def live_split():
         "(<a href='https://github.com/jacobazu/dk1-battery-trade/blob/main/opportunity/RULES.md'>RULES.md</a>, "
         "<a href='backtest.html'>backtest tab Helping Energinet</a>). Price taker, no activation energy.</p>")
 
+
+# solar panel with the battery as its buffer, solar/RULES.md, results from solar/solar.py
+def solar_tab():
+    sm = pd.read_csv("solar/results/summary.csv").iloc[0]
+    dl = pd.read_csv("solar/results/daily.csv", parse_dates=["date"])
+    names = {"A": "A: no battery, errors at the imbalance price", "B": "B: battery as buffer, day-ahead only",
+             "C": "C: B plus Energinet's reserves"}
+    cols = {"A": GREY, "B": ACCENT, "C": GREEN}
+    month = dl.groupby(dl["date"].dt.to_period("M"))[["A €", "B €", "C €"]].mean()
+    fig = go.Figure()
+    for k in "ABC":
+        fig.add_bar(x=month.index.strftime("%b %Y"), y=month[f"{k} €"], name=names[k], marker_color=cols[k],
+                    hovertemplate="%{x}: %{y:,.0f} € a day<extra></extra>")
+    fig.update_layout(barmode="group", yaxis_title="€ a day")
+    hit = go.Figure()
+    for k in "ABC":
+        hit.add_bar(y=[names[k]], x=[100 * sm[f"{k} sun hours past the battery"]], orientation="h", marker_color=cols[k],
+                    showlegend=False, hovertemplate="%{x:.1f}% of sun hours<extra></extra>")
+    hit.add_vline(x=5, line=dict(color=RED, dash="dot"), annotation_text="aim 1 in 20", annotation_position="top")
+    hit.update_xaxes(ticksuffix="%", range=[0, 100])
+    hit.update_yaxes(autorange="reversed")
+    wins = "C wins" if sm["C wins"] else "C doesn't win"
+    return f"""
+<div class='kpis'>
+{kpi("A: no battery", eur(sm['A € a day']), f"a day, imbalance {eur(sm['A imbalance € a day'])} a day", GREY)}
+{kpi("B: buffer, day-ahead only", eur(sm['B € a day']), f"a day, {eur(sm['B minus A'])} more than A (t = {sm['B newey-west t']:.1f})", ACCENT)}
+{kpi("C: buffer and reserves", eur(sm['C € a day']), f"a day, {eur(sm['C minus A'])} more than A (t = {sm['newey-west t']:.1f})", GREEN)}
+{kpi("Main test", wins, "C against A, Newey-West t > 2", INK)}
+</div>
+{card("€ a day, by month", style(fig, 340))}
+{card("Sun hours where an error still went past the battery", style(hit, 200) +
+      "<p class='note'>A has no battery, so every error is settled. The aim, fixed before the run, is at most 1 in 20. "
+      "Missed by B and C: errors bigger than the buffer, and a battery fuller or emptier than planned after covering "
+      "one, so a later trade can't be made in full.</p>")}
+<p class='note'>Backtest, {sm['first']} to {sm['last']}, {int(sm['days'])} days. A 1 MWp panel that produces like DK1's
+average solar, the 1 MW / 2 MWh battery and a shared 1 MW grid connection. The battery keeps room and charge for the
+1 in 20 worst solar error each hour, measured on earlier days, and covers the error as it happens; the rest is settled
+at Energinet's imbalance price. Rules fixed before the run:
+<a href="https://github.com/jacobazu/dk1-battery-trade/blob/main/solar/RULES.md">solar/RULES.md</a>. Left out: cloud
+swings inside the hour, a single park's own weather, intraday trading, activation energy, imbalance fees.</p>"""
+
+
+if Path("solar/results/summary.csv").exists():
+    backtest_tabs["Solar and battery"] = solar_tab()
 
 live_tabs = {k: v for k, v in [*[(k, v) for k, v in live_tabs.items() if k != "Method"],
                                 ("Helping Energinet", live_split()), ("Method", live_tabs["Method"])]}
