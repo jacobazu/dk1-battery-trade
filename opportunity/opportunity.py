@@ -49,7 +49,7 @@ def reserve_prices(start="2025-10-01"):
     return pd.concat(out, axis=1).reset_index()
 
 
-def plan(price, res, force=None, cyclic=True, fix=None, setup=SETUP, c=C):
+def plan(price, res, force=None, cyclic=True, fix=None, setup=SETUP, c=C, soc=False):
     """Day-ahead plan and capacity per hour that earn the most at day-ahead `price` and reserve prices `res`
     (24 x 3, € per MW and hour). force=(product, hour) holds exactly 1 MW of that product in that hour and nothing
     else. Returns (net sale per hour, capacity 24 x 3)."""
@@ -105,6 +105,8 @@ def plan(price, res, force=None, cyclic=True, fix=None, setup=SETUP, c=C):
                bounds=Bounds(lower, upper), options={"mip_rel_gap": 1e-6})
     if not sol.success:
         raise RuntimeError("lp did not solve")
+    if soc:   # also the charge at the end of each hour, the day's start first (25 values)
+        return sol.x[dis] - sol.x[ch], sol.x[r], np.r_[sol.x[s0], sol.x[s]]
     return sol.x[dis] - sol.x[ch], sol.x[r]
 
 

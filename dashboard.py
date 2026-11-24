@@ -691,29 +691,105 @@ if (saved && document.querySelector(`.models button[data-model="${{saved}}"]`)) 
 
 
 # live split day: capacity saved each morning before 07:30 by opportunity/live.py, scored when the day is over
+# buy and sell as on the plan tab
+SPLIT = {"FCR": "#5b8a1a", "aFRR up": "#b32640", "mFRR up": INK, "sell": ACCENT, "buy": TEAL, "idle": LINE}
+
+
+def split_days(caps):
+    """each saved day: capacity (saved before the auctions) and the day-ahead plan in what is left, on the saved
+    price forecast, the same plan live.py scores. a day whose forecast isn't out yet has no plan"""
+    from opportunity.opportunity import PRODUCTS, plan
+    from data import load_live
+    lv = load_live(caps["date"].min() - pd.Timedelta(days=1))
+    out = {}
+    for d, g in caps.groupby("date"):
+        cap = g.sort_values("hour")[PRODUCTS].to_numpy(dtype=float)
+        f = lv[lv.date == d].sort_values("hour")
+        q = soc = None
+        if len(f) == 24 and f.ensemble.notna().all():
+            q, _, soc = plan(f.ensemble.to_numpy(), None, fix=cap, soc=True)
+            q = np.where(np.abs(q) < 1e-6, 0, q)
+        miss = g["missing"].dropna() if "missing" in g else pd.Series(dtype=str)
+        out[d] = {"cap": cap, "q": q, "soc": soc, "made": g["made_utc"].iloc[0], "missing": miss.iloc[0] if len(miss) else ""}
+    return out
+
+
+def day_chart(x):
+    """one day's 1 MW hour by hour: held for energinet, sold, bought; and the charge"""
+    from plotly.subplots import make_subplots
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.68, 0.32], vertical_spacing=0.06)
+    h = list(range(24))
+    for i, k in enumerate(["FCR", "aFRR up", "mFRR up"]):
+        fig.add_trace(go.Bar(x=h, y=x["cap"][:, i], name=f"held: {k}", marker_color=SPLIT[k],
+                             hovertemplate=f"{k} %{{y:.2f}} MW<extra></extra>"), 1, 1)
+    if x["q"] is not None:
+        fig.add_trace(go.Bar(x=h, y=np.clip(x["q"], 0, None), name="sell day-ahead", marker_color=SPLIT["sell"],
+                             hovertemplate="sell %{y:.2f} MW<extra></extra>"), 1, 1)
+        fig.add_trace(go.Bar(x=h, y=np.clip(x["q"], None, 0), name="buy day-ahead", marker_color=SPLIT["buy"],
+                             hovertemplate="buy %{y:.2f} MW<extra></extra>"), 1, 1)
+        fig.add_trace(go.Scatter(x=[-0.5] + [i + 0.5 for i in h], y=x["soc"], mode="lines", line=dict(color=GREY, width=2),
+                                 fill="tozeroy", fillcolor="rgba(120,113,108,0.12)", name="stored",
+                                 hovertemplate="stored %{y:.2f} MWh<extra></extra>"), 2, 1)
+    fig.update_layout(barmode="relative", bargap=0.12)
+    fig.update_yaxes(range=[-1.05, 1.05], ticksuffix=" MW", row=1, col=1)
+    fig.update_yaxes(range=[0, SETUP["cap_mwh"] * 1.05], ticksuffix=" MWh", row=2, col=1)
+    fig.update_xaxes(tickvals=list(range(0, 24, 3)), ticktext=[f"{v:02d}:00" for v in range(0, 24, 3)], row=2, col=1)
+    return style(fig, 420)
+
+
+def days_strip(days, scored):
+    """every day as a row of 24 hours, coloured by what most of the 1 MW did"""
+    keys = list(SPLIT)
+    names, z, txt = [], [], []
+    for d in pd.date_range(min(days), max(days))[::-1]:
+        if d not in days:   # nothing saved that morning
+            names.append(f"{d:%a %d %b}   not saved"); z.append([None] * 24); txt.append(["nothing saved"] * 24)
+            continue
+        x = days[d]
+        q = x["q"] if x["q"] is not None else np.zeros(24)
+        parts = np.column_stack([x["cap"], np.clip(q, 0, None), np.clip(-q, 0, None)])
+        top = np.where(parts.max(axis=1) < 0.05, 5, parts.argmax(axis=1))
+        s = scored.get(d)
+        names.append(f"{d:%a %d %b}{' *' if x['missing'] else ''}   " + (eur(s) if s is not None else "not scored"))
+        z.append(top.tolist())
+        txt.append([", ".join(f"{k} {v:.2f}" for k, v in zip(keys[:5], parts[h]) if v >= 0.01) or "idle" for h in range(24)])
+    n = len(keys)
+    scale = [[s, SPLIT[keys[i]]] for i in range(n) for s in (i / n, (i + 1) / n)]
+    fig = go.Figure(go.Heatmap(z=z, y=names, x=list(range(24)), text=txt, zmin=-0.5, zmax=n - 0.5, colorscale=scale,
+                               showscale=False, xgap=2, ygap=4, hovertemplate="%{x}:00 · %{text} MW<extra>%{y}</extra>"))
+    for k in keys:   # legend
+        fig.add_trace(go.Bar(x=[None], y=[None], name=k, marker_color=SPLIT[k], showlegend=True))
+    fig.update_xaxes(tickvals=list(range(0, 24, 3)), ticktext=[f"{v:02d}:00" for v in range(0, 24, 3)])
+    fig.update_yaxes(autorange="reversed", gridcolor="rgba(0,0,0,0)", color=INK)
+    out = style(fig, 90 + 34 * len(names))
+    return out
+
+
 def live_split():
     cp = Path("opportunity/live_capacity.csv"); sc = Path("opportunity/live_scored.csv")
     caps = pd.read_csv(cp, parse_dates=["date"]) if cp.exists() else None
+    s0 = pd.read_csv(sc, parse_dates=["date"]) if sc.exists() else None
     parts = []
     if caps is not None and len(caps):
-        d = caps["date"].max(); g = caps[caps["date"] == d].sort_values("hour")
-        fig = go.Figure()
-        for k, col in zip(["FCR", "aFRR up", "mFRR up"], [ACCENT, TEAL, INK]):
-            fig.add_trace(go.Bar(x=g["hour"], y=g[k], name=k, marker_color=col,
-                                 hovertemplate=f"%{{x}}:00 {k} %{{y:.2f}} MW<extra></extra>"))
-        fig.update_layout(barmode="stack")
-        fig.update_xaxes(tickvals=list(range(0, 24, 3)), ticktext=[f"{h:02d}:00" for h in range(0, 24, 3)])
-        fig.update_yaxes(range=[0, 1.05], ticksuffix=" MW")
-        miss = g["missing"].dropna().iloc[0] if "missing" in g and g["missing"].notna().any() else ""
-        parts.append(card(f"Capacity for {d:%A %d %b}, saved {g['made_utc'].iloc[0]} UTC, before the 07:30 auctions",
-                          style(fig, 300) + "<p class='note'>What is left of the 1 MW goes to day-ahead trading, "
-                          "planned on the price forecast later in the morning."
-                          + (f" Energinet published no {miss} prices that morning, so {miss} was left out." if miss else "")
-                          + "</p>"))
+        days = split_days(caps)
+        # the latest day with its trades planned; a day saved this morning gets them once the price forecast is out
+        d = max([k for k in days if days[k]["q"] is not None], default=max(days)); x = days[d]
+        note = ("Up: held for Energinet and sold day-ahead, at most 1 MW together. Down: bought day-ahead. "
+                "The held power is chosen before Energinet's 07:30 auctions on what is known then; the trades are "
+                "planned on the saved price forecast in what is left.")
+        if x["q"] is None:
+            note += " The price forecast for this day isn't out yet, so only the held power is shown."
+        if x["missing"]:
+            note += f" Energinet published no {x['missing']} prices that morning, so {x['missing']} was left out."
+        parts.append(card(f"{d:%A %d %b}, hour by hour", day_chart(x) + f"<p class='note'>{note}</p>"))
+        scored = dict(zip(s0["date"], s0["split day"])) if s0 is not None and len(s0) else {}
+        parts.append(card("Every day so far", days_strip(days, scored) +
+                          "<p class='note'>What most of the 1 MW did each hour. Right of the date: the day paid at the real "
+                          "prices. * No FCR price from Energinet that morning.</p>"))
     else:
         parts.append(card("Capacity", "<p class='note'>The first choice is saved before 07:30 on 13 Nov 2026, "
                                        "for 14 Nov.</p>"))
-    s_ = pd.read_csv(sc, parse_dates=["date"]) if sc.exists() else None
+    s_ = s0
     if s_ is not None and len(s_):
         miss = s_["missing"].fillna("") if "missing" in s_ else pd.Series("", index=s_.index)
         s_ = s_.assign(missing=miss)
@@ -733,7 +809,7 @@ def live_split():
     else:
         kp = ""
         parts.append(card("Each day, paid at the real prices", "<p class='note'>Starts when the first day is over.</p>"))
-    return kp + "<div class='grid2'>" + "".join(parts) + "</div>" + (
+    return kp + "".join(parts) + (
         "<p class='note'>Paper trading, same rules as the backtest "
         "(<a href='https://github.com/jacobazu/dk1-battery-trade/blob/main/opportunity/RULES.md'>RULES.md</a>, "
         "<a href='backtest.html'>backtest tab Helping Energinet</a>). Price taker, no activation energy.</p>")
