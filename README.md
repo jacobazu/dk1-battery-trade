@@ -31,6 +31,21 @@ rules were committed before the run ([opportunity/RULES.md](opportunity/RULES.md
 - Runs live as a paper trade from 14 Nov 2026: the capacity is saved each morning before the auctions and scored when
   the day is over (the Helping Energinet tab on the dashboard).
 
+## A better guess of tomorrow's reserve prices
+
+The split day picks its capacity on yesterday's reserve prices. Two other guesses, rules committed before the run
+([reserve_forecast/RULES.md](reserve_forecast/RULES.md)), 415 days from 2 Oct 2025 to 25 Nov 2026, € a day:
+
+| Guess | € a day |
+|---|---|
+| Yesterday (now) | 606 |
+| Median of the last 7 days | 575 |
+| A small ridge model | 586 |
+| Knowing the real prices | 744 |
+
+Neither beats yesterday. The median is off by less on aFRR and mFRR but smooths away the spikes that pay most. Both
+keep running live next to the split day, judged 1 Mar 2027.
+
 ## Where the costs come from
 
 - Nord Pool fee: 0.055 €/MWh bought or sold ([fee schedule 2026](https://www.nordpoolgroup.com/4a7ad8/globalassets/trading-and-services/nord-pool-fee-schedule-2026-nordic-and-baltic-market.pdf)). The yearly fee is left out.

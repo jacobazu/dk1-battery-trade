@@ -30,11 +30,14 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python opportunity/live.py
+      - run: python reserve_forecast/live.py   # challengers b and c, not shown
+        continue-on-error: true
       - name: Save
         run: |
           git config user.name jacobazu
           git config user.email jacobqazizada12@gmail.com
           git add opportunity/live_*.csv 2>/dev/null || true   # one add per glob: a missing file must not stop the others
+          git add reserve_forecast/live_*.csv 2>/dev/null || true
           git diff --cached --quiet && exit 0
           git commit -m "split day: capacity saved $(date -u '+%F %H:%M') UTC"
           for try in 1 2 3; do git pull --rebase && git push && exit 0; sleep 15; done
