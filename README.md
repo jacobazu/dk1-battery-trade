@@ -46,6 +46,25 @@ The split day picks its capacity on yesterday's reserve prices. Two other guesse
 Neither beats yesterday. The median is off by less on aFRR and mFRR but smooths away the spikes that pay most. Both
 keep running live next to the split day, judged 1 Mar 2027.
 
+## Are batteries eating their own prices?
+
+What 1 MW earns in each market, month by month since Jul 2023 ([cannibal/results/monthly.csv](cannibal/results/monthly.csv)),
+€ a day:
+
+| | Oct 2024 | Oct 2025 | Oct 2026 |
+|---|---|---|---|
+| aFRR up | 2,079 | 449 | 180 |
+| FCR | 341 | 373 | 386 |
+| mFRR up | 28 | 222 | 187 |
+| Day-ahead, best cycle with hindsight | 185 | 174 | 231 |
+
+- aFRR up fell about 90% in two years while Energinet buys the same 90-100 MW. That is what new batteries
+  competing for a fixed need looks like, but nothing here says who bid.
+- FCR has no trend, only summer highs. Most of DK1's FCR is bought abroad, so the price is set in a much bigger market.
+  The share bought inside DK1 went from about 10% to 30-40% since Apr 2025.
+- Day-ahead spreads grew, mostly in summer.
+- No public month-by-month count of DK1 batteries, so this is the price side only.
+
 ## Where the costs come from
 
 - Nord Pool fee: 0.055 €/MWh bought or sold ([fee schedule 2026](https://www.nordpoolgroup.com/4a7ad8/globalassets/trading-and-services/nord-pool-fee-schedule-2026-nordic-and-baltic-market.pdf)). The yearly fee is left out.
